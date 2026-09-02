@@ -11,7 +11,11 @@ from typing import List, Optional
 import httpx
 
 from app.core import settings
-from app.providers.llm.base import BaseLLMProvider, GeneratedScript
+from app.providers.llm.base import (
+    BaseLLMProvider,
+    DiscoveredModel,
+    GeneratedScript,
+)
 
 
 class OpenAICompatibleProvider(BaseLLMProvider):
@@ -30,6 +34,42 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         # An explicit api_key can be empty for local OpenAI-compatible
         # servers (LM Studio, vLLM), so only the URL is required.
         return bool(self.base_url)
+
+    async def list_models(self) -> List[DiscoveredModel]:
+        """Live model discovery via the OpenAI-compatible GET /models."""
+        if not self.is_configured():
+            raise RuntimeError("OpenAI-compatible provider has no base URL configured")
+
+        url = f"{self.base_url.rstrip('/')}/models"
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+
+        # OpenAI-style {"data": [...]}; some servers return a bare list or
+        # {"models": [...]} — accept all three shapes.
+        items = (
+            data if isinstance(data, list) else data.get("data") or data.get("models") or []
+        )
+        models: List[DiscoveredModel] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            model_id = str(item.get("id") or item.get("name") or "").strip()
+            if not model_id:
+                continue
+            models.append(
+                DiscoveredModel(
+                    id=model_id,
+                    label=model_id,
+                    family=item.get("owned_by"),
+                )
+            )
+        models.sort(key=lambda m: m.id.lower())
+        return models
 
     async def generate_script(
         self, topic: str, tone: str = "reddit-commenter", max_lines: int = 8

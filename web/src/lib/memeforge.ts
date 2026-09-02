@@ -6,6 +6,7 @@ import { apiBase, serverUrl } from '@/lib/config';
 import type {
 	GameplayClip,
 	ModelCatalogEntry,
+	ModelDiscoveryResult,
 	RenderJobInfo,
 	ScriptResponse,
 	TTSProviderId,
@@ -16,6 +17,8 @@ export interface GenerateScriptPayload {
 	topic: string;
 	provider: string;
 	model?: string;
+	base_url?: string;
+	api_key?: string;
 	tone?: string;
 	max_lines?: number;
 }
@@ -32,6 +35,19 @@ export const MemeforgeAPI = {
 
 	async listModels(): Promise<ModelCatalogEntry[]> {
 		const { data } = await apiBase.get('/models');
+		return data;
+	},
+
+	async discoverModels(payload: {
+		provider: string;
+		baseUrl?: string;
+		apiKey?: string;
+	}): Promise<ModelDiscoveryResult> {
+		const { data } = await apiBase.post('/models/discover', {
+			provider: payload.provider,
+			base_url: payload.baseUrl || undefined,
+			api_key: payload.apiKey || undefined
+		});
 		return data;
 	},
 

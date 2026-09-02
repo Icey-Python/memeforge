@@ -8,6 +8,8 @@ from app.core import settings
 from app.providers.llm import registry as llm_registry
 from app.schemas.render_schema import (
     LLMProvider,
+    ModelDiscoveryRequest,
+    ModelDiscoveryResponse,
     ScriptGenerateRequest,
     ScriptResponse,
 )
@@ -21,11 +23,47 @@ async def list_models():
     return llm_registry.list_llm_providers()
 
 
+@script_router.post("/models/discover", response_model=ModelDiscoveryResponse)
+async def discover_models(request: ModelDiscoveryRequest):
+    """Live model discovery for the selected provider.
+
+    Queries the provider endpoint (Ollama `/api/tags`, OpenAI-compatible
+    `GET /models`) so the model connector dropdown lists what is actually
+    installed. Connectivity/HTTP failures are reported as `reachable: false`
+    (HTTP 200) instead of a 5xx so the UI can render a helpful hint.
+    """
+    provider = llm_registry.get_llm_provider(
+        request.provider.value,
+        base_url=request.base_url,
+        api_key=request.api_key,
+    )
+    try:
+        models = await provider.list_models()
+    except Exception as exc:
+        detail = str(exc).strip() or type(exc).__name__
+        return ModelDiscoveryResponse(
+            provider=provider.name,
+            base_url=provider.base_url,
+            reachable=False,
+            error=f"Could not list models at {provider.base_url} — {detail}",
+            models=[],
+        )
+    return ModelDiscoveryResponse(
+        provider=provider.name,
+        base_url=provider.base_url,
+        reachable=True,
+        models=models,
+    )
+
+
 @script_router.post("/generate-script", response_model=ScriptResponse)
 async def generate_script(request: ScriptGenerateRequest):
     """Generate a meme script about a topic with the selected model connector."""
     provider = llm_registry.get_llm_provider(
-        request.provider.value, model=request.model
+        request.provider.value,
+        model=request.model,
+        base_url=request.base_url,
+        api_key=request.api_key,
     )
     try:
         script = await provider.generate_script(

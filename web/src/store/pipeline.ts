@@ -90,6 +90,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 				topic,
 				provider: model.provider,
 				model: model.model || undefined,
+				base_url: model.baseUrl || undefined,
+				api_key: model.apiKey || undefined,
 				tone
 			});
 			set({

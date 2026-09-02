@@ -6,6 +6,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from app.providers.llm.base import DiscoveredModel
+
 
 # --- Shared enums ---------------------------------------------------------
 
@@ -40,6 +42,17 @@ class ScriptGenerateRequest(BaseModel):
     model: Optional[str] = Field(
         default=None, description="Model name override (provider-specific)"
     )
+    base_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "Provider base URL override, e.g. http://localhost:11434 for "
+            "Ollama (falls back to the server .env default when blank)"
+        ),
+    )
+    api_key: Optional[str] = Field(
+        default=None,
+        description="API key override (OpenAI-compatible endpoints)",
+    )
     tone: str = Field(
         default="reddit-commenter", description="Voice/tone of the script"
     )
@@ -60,6 +73,34 @@ class ScriptResponse(BaseModel):
     model: Optional[str] = None
     lines: List[ScriptLine]
     generated_at: datetime
+
+
+# --- Live model discovery ---------------------------------------------------
+
+
+class ModelDiscoveryRequest(BaseModel):
+    provider: LLMProvider = Field(
+        ..., description="LLM connector whose endpoint should be queried"
+    )
+    base_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "Provider base URL override, e.g. http://localhost:11434 for "
+            "Ollama (falls back to the server .env default when blank)"
+        ),
+    )
+    api_key: Optional[str] = Field(
+        default=None,
+        description="API key override (OpenAI-compatible endpoints)",
+    )
+
+
+class ModelDiscoveryResponse(BaseModel):
+    provider: str
+    base_url: Optional[str] = None
+    reachable: bool
+    error: Optional[str] = None
+    models: List[DiscoveredModel] = []
 
 
 # --- TTS -------------------------------------------------------------------

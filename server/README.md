@@ -25,6 +25,7 @@ uvicorn app.main:app --reload --port 8000
 | ------ | -------------------------- | ---------------------------------------------- |
 | GET    | `/health`                  | Liveness + capability report (ffmpeg, edge-tts) |
 | GET    | `/api/v1/models`           | LLM connector catalog                          |
+| POST   | `/api/v1/models/discover`  | Live model discovery (Ollama `/api/tags`, OpenAI-compatible `/v1/models`) |
 | POST   | `/api/v1/generate-script`  | Generate a meme script for a topic             |
 | GET    | `/api/v1/voices`           | Voice catalog (`?provider=edge\|azure\|elevenlabs`) |
 | POST   | `/api/v1/tts`              | Synthesize speech, returns audio URL           |
