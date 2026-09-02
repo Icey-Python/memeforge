@@ -216,6 +216,36 @@ def test_voices_default_edge():
     resp = client.get("/api/v1/voices")
     assert resp.status_code == 200
     assert len(resp.json()) > 0
+    # Voices carry category tags; popular meme neural voices are pre-tagged.
+    voices = resp.json()
+    assert all("tags" in v for v in voices)
+    meme_ids = {v["id"] for v in voices if "meme" in v["tags"]}
+    assert {
+        "en-US-ChristopherNeural",
+        "en-US-GuyNeural",
+        "en-US-EricNeural",
+        "en-US-JennyNeural",
+    } <= meme_ids
+
+
+def test_voices_tiktok_meme_catalog():
+    resp = client.get("/api/v1/voices", params={"provider": "tiktok"})
+    assert resp.status_code == 200
+    voices = resp.json()
+    ids = {v["id"] for v in voices}
+    assert {
+        "en_us_002",  # Jessie
+        "en_male_cody",  # Serious Male
+        "en_male_narration",  # Narrator
+        "en_us_ghostface",  # Ghostface
+        "en_us_trickster",  # Trickster
+    } <= ids
+    assert all("meme" in v["tags"] for v in voices)
+
+
+def test_voices_unknown_provider_400():
+    resp = client.get("/api/v1/voices", params={"provider": "nope"})
+    assert resp.status_code == 422  # pydantic enum validation
 
 
 def test_caption_timeline():

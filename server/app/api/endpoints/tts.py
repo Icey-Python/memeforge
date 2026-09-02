@@ -15,7 +15,11 @@ tts_router = APIRouter()
 
 @tts_router.get("/voices")
 async def list_voices(provider: TTSProvider = TTSProvider.edge):
-    """Voice catalog for the frontend voiceover node voice picker."""
+    """Voice catalog for the frontend voiceover node voice picker.
+
+    Voices carry `tags` (e.g. "meme") so the studio can group them into
+    categories like "TikTok Meme Voices" or "Popular meme neural voices".
+    """
     try:
         voices = await tts_registry.list_tts_voices(provider.value)
     except Exception as exc:
@@ -26,6 +30,7 @@ async def list_voices(provider: TTSProvider = TTSProvider.edge):
             "label": v.label,
             "language": v.language,
             "gender": v.gender,
+            "tags": v.tags,
         }
         for v in voices
     ]

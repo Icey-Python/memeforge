@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 		template: '%s | Memeforge'
 	},
 	description:
-		'AI-powered Reddit-style gaming meme video generator: script via LLM connectors, free TTS voiceover, and vertical 1080x1920 split-screen renders.',
+		'AI-powered Reddit-style gaming meme video generator: script via LLM connectors, free TikTok meme + neural voices, and vertical 1080x1920 full-screen renders.',
 	keywords: [
 		'memes',
 		'video generator',

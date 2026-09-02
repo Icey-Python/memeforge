@@ -26,7 +26,7 @@ OUTPUT_DIR = Path(os.getenv("MEMEFORGE_OUTPUT_DIR", BASE_DIR / "outputs"))
 APP_TITLE = "Memeforge API"
 APP_DESCRIPTION = (
     "Reddit-style gaming meme video generator: LLM script generation, "
-    "TTS voiceover, and vertical split-screen video rendering."
+    "TTS voiceover, and full-screen vertical video rendering."
 )
 APP_VERSION = "0.1.0"
 API_V1_PREFIX = "/api/v1"
@@ -46,9 +46,15 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 
-# Default TTS provider: "edge" (free, via edge-tts), "azure", "elevenlabs".
+# Default TTS provider: "edge" (free, via edge-tts), "tiktok" (free meme
+# voices), "azure", "elevenlabs".
 DEFAULT_TTS_PROVIDER = os.getenv("MEMEFORGE_TTS_PROVIDER", "edge")
 DEFAULT_EDGE_VOICE = os.getenv("MEMEFORGE_EDGE_VOICE", "en-US-ChristopherNeural")
+
+# TikTok meme voices (free, keyless WXA endpoint; see providers/tts/tiktok.py)
+DEFAULT_TIKTOK_VOICE = os.getenv("MEMEFORGE_TIKTOK_VOICE", "en_us_002")
+# Optional: comma-separated override of the endpoint mirrors to try.
+TIKTOK_TTS_URLS = os.getenv("MEMEFORGE_TIKTOK_TTS_URLS", "")
 
 # Azure Speech (paid tier; edge-tts uses the same neural voices for free)
 AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY", "")
@@ -62,7 +68,8 @@ ELEVENLABS_DEFAULT_VOICE = os.getenv(
 
 # --- Rendering ------------------------------------------------------------
 
-# Vertical short format: top Reddit card, bottom gameplay loop.
+# Vertical short format: full-screen gameplay background with a floating
+# Reddit post card overlay and center kinetic captions.
 VIDEO_WIDTH = int(os.getenv("MEMEFORGE_VIDEO_WIDTH", "1080"))
 VIDEO_HEIGHT = int(os.getenv("MEMEFORGE_VIDEO_HEIGHT", "1920"))
 VIDEO_FPS = int(os.getenv("MEMEFORGE_VIDEO_FPS", "30"))

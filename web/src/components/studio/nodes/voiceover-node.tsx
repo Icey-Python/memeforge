@@ -1,17 +1,21 @@
 'use client';
 
-// Voiceover Node: TTS provider + voice picker + instant preview.
+// Voiceover Node: TTS provider + voice picker + instant previews.
+//
+// TikTok Meme Voices get their own category with per-voice preview
+// buttons; edge/azure voices are grouped into "meme staples" vs the rest.
 
 import { useQuery } from '@tanstack/react-query';
 import type { NodeProps } from '@xyflow/react';
-import { AudioLines, Loader2, Play } from 'lucide-react';
+import { AudioLines, Check, Loader2, Play } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { EDGE_VOICES, TTS_PROVIDERS } from '@/lib/catalog';
+import { EDGE_VOICES, TIKTOK_VOICES, TTS_PROVIDERS } from '@/lib/catalog';
 import { MemeforgeAPI, mediaUrl } from '@/lib/memeforge';
+import { cn } from '@/lib/utils';
 import { usePipelineStore } from '@/store/pipeline';
-import type { TTSProviderId } from '@/types/studio';
+import type { TTSProviderId, VoiceOption } from '@/types/studio';
 import { NodeBadge, NodeShell, StudioSelect } from '../node-shell';
 
 export function VoiceoverNode(_props: NodeProps) {
@@ -20,7 +24,7 @@ export function VoiceoverNode(_props: NodeProps) {
 	const ttsVoice = usePipelineStore((s) => s.ttsVoice);
 	const setTtsVoice = usePipelineStore((s) => s.setTtsVoice);
 
-	const [previewing, setPreviewing] = useState(false);
+	const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -31,31 +35,38 @@ export function VoiceoverNode(_props: NodeProps) {
 		staleTime: 5 * 60_000
 	});
 
-	// Neural shortlist applies to edge + azure; elevenlabs lists remotely
-	// (empty until an API key is configured server-side).
-	const voiceOptions =
-		voices && voices.length > 0
-			? voices
-			: ttsProvider === 'elevenlabs'
-				? []
-				: EDGE_VOICES;
+	const isTikTok = ttsProvider === 'tiktok';
 
-	const preview = async () => {
-		setPreviewing(true);
+	// Offline fallbacks per provider: edge + azure share the neural
+	// shortlist, tiktok has the meme catalog; elevenlabs lists remotely
+	// (empty until an API key is configured server-side).
+	const fallbackVoices: VoiceOption[] = isTikTok
+		? TIKTOK_VOICES
+		: ttsProvider === 'elevenlabs'
+			? []
+			: EDGE_VOICES;
+	const voiceOptions: VoiceOption[] =
+		voices && voices.length > 0 ? voices : fallbackVoices;
+
+	const preview = async (voice: string) => {
+		setPreviewingVoice(voice);
 		setError(null);
 		try {
 			const result = await MemeforgeAPI.synthesizeSpeech({
 				text: 'This is memeforge, baby. Let us cook.',
 				provider: ttsProvider,
-				voice: ttsVoice
+				voice
 			});
 			setPreviewUrl(mediaUrl(result.audio_url));
 		} catch (err: any) {
 			setError(err?.response?.data?.detail ?? 'Voice preview failed.');
 		} finally {
-			setPreviewing(false);
+			setPreviewingVoice(null);
 		}
 	};
+
+	const memeVoices = voiceOptions.filter((v) => v.tags?.includes('meme'));
+	const otherVoices = voiceOptions.filter((v) => !v.tags?.includes('meme'));
 
 	return (
 		<NodeShell
@@ -85,15 +96,86 @@ export function VoiceoverNode(_props: NodeProps) {
 
 			<div className="space-y-1.5">
 				<Label htmlFor="tts-voice">Voice</Label>
-				{voiceOptions.length > 0 ? (
+				{isTikTok ? (
+					// TikTok Meme Voices: category list with direct previews.
+					<div className="space-y-1" data-testid="tiktok-voice-list">
+						{voiceOptions.map((v) => {
+							const selected = v.id === ttsVoice;
+							const previewing = previewingVoice === v.id;
+							return (
+								<div
+									key={v.id}
+									className={cn(
+										'flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition-colors',
+										selected
+											? 'border-emerald-500/50 bg-emerald-500/10'
+											: 'border-border/60 bg-background/60'
+									)}
+								>
+									<button
+										type="button"
+										className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+										onClick={() => setTtsVoice(v.id)}
+									>
+										{selected && (
+											<Check className="size-3.5 shrink-0 text-emerald-400" />
+										)}
+										<span className="min-w-0">
+											<span className="block truncate text-xs font-medium">
+												{v.label}
+											</span>
+											<span className="block text-[10px] text-muted-foreground">
+												{v.id} · {v.gender}
+											</span>
+										</span>
+									</button>
+									<Button
+										variant="ghost"
+										size="icon"
+										className="size-7 shrink-0"
+										onClick={() => preview(v.id)}
+										disabled={previewingVoice !== null}
+										aria-label={`Preview ${v.label}`}
+									>
+										{previewing ? (
+											<Loader2 className="size-3.5 animate-spin" />
+										) : (
+											<Play className="size-3.5" />
+										)}
+									</Button>
+								</div>
+							);
+						})}
+					</div>
+				) : voiceOptions.length > 0 ? (
 					<StudioSelect
 						id="tts-voice"
 						value={ttsVoice}
 						onChange={setTtsVoice}
-						options={voiceOptions.map((v) => ({
-							value: v.id,
-							label: `${v.label} (${v.language}, ${v.gender})`
-						}))}
+						groups={[
+							...(memeVoices.length > 0
+								? [
+										{
+											label: '⭐ Popular meme voices',
+											options: memeVoices.map((v) => ({
+												value: v.id,
+												label: `${v.label} (${v.language}, ${v.gender})`
+											}))
+										}
+									]
+								: []),
+							...(otherVoices.length > 0
+								? [
+										{
+											label: 'More neural voices',
+											options: otherVoices.map((v) => ({
+												value: v.id,
+												label: `${v.label} (${v.language}, ${v.gender})`
+											}))
+										}
+									]
+								: [])
+						]}
 					/>
 				) : (
 					<p className="text-xs text-muted-foreground">
@@ -108,15 +190,15 @@ export function VoiceoverNode(_props: NodeProps) {
 				variant="outline"
 				size="sm"
 				className="w-full"
-				onClick={preview}
-				disabled={previewing}
+				onClick={() => preview(ttsVoice)}
+				disabled={previewingVoice !== null}
 			>
-				{previewing ? (
+				{previewingVoice === ttsVoice ? (
 					<Loader2 className="size-3.5 animate-spin" />
 				) : (
 					<Play className="size-3.5" />
 				)}
-				Preview voice
+				Preview selected voice
 			</Button>
 
 			{previewUrl && (

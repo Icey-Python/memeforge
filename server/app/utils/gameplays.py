@@ -1,8 +1,9 @@
 """Gameplay background loop catalog.
 
-Vertical split-screen shorts need a continuous gameplay loop for the
-bottom frame. Drop matching files into `server/assets/gameplay/` (id.mp4)
-to make a clip `available`; the render API only accepts available clips.
+Viral-style shorts need a continuous gameplay loop filling the full
+vertical frame as background. Drop matching files into
+`server/assets/gameplay/` (id.mp4) to make a clip `available`; the render
+API only accepts available clips.
 """
 
 from typing import Dict, List, Optional

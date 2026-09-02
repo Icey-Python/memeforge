@@ -30,7 +30,7 @@ A React Flow (`@xyflow/react`) canvas with custom nodes:
 | **Model Connector** | Choose the LLM (OpenAI-compatible / Ollama / offline mock)       |
 | **Topic / Prompt**  | Enter the meme topic, pick a tone, trigger script generation     |
 | **Script**          | Editable script lines; last line = punchline (gets the SFX)      |
-| **Voiceover / TTS** | Provider (Edge-TTS free / Azure / ElevenLabs) + voice picker     |
+| **Voiceover / TTS** | Provider (TikTok meme voices / Edge-TTS / Azure / ElevenLabs) + voice picker with direct previews |
 | **Gameplay**        | Background loop picker (Minecraft Parkour, Subway Surfers, GTA…) |
 | **Preview & Export**| Render trigger, job progress, vertical 1080×1920 video player    |
 

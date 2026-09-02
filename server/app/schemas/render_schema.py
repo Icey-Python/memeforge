@@ -20,6 +20,7 @@ class LLMProvider(str, Enum):
 
 class TTSProvider(str, Enum):
     edge = "edge"  # free (edge-tts, Azure neural voices)
+    tiktok = "tiktok"  # free (classic TikTok meme voices)
     azure = "azure"  # Azure Speech (paid tier)
     elevenlabs = "elevenlabs"
 
@@ -173,3 +174,4 @@ class VoiceOption(BaseModel):
     label: str
     language: str
     gender: str
+    tags: List[str] = []
