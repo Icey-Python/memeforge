@@ -198,6 +198,92 @@ async def _boom(self, text: str):
     raise RuntimeError("all TikTok mirrors returned HTTP 404")
 
 
+# --- Edge-TTS: word-boundary metadata ----------------------------------------
+
+
+class _FakeEdgeCommunicate:
+    """Stand-in for edge_tts.Communicate yielding audio + WordBoundaries."""
+
+    def __init__(self, text: str, voice: str, **kwargs):
+        self.kwargs = kwargs
+
+    async def stream(self):
+        for chunk in [
+            {"type": "audio", "data": b"mp3-bytes-"},
+            {
+                "type": "WordBoundary",
+                "offset": 1_000_000,  # 100ns ticks → 0.1s
+                "duration": 2_000_000,  # → 0.2s
+                "text": "brace",
+            },
+            {"type": "audio", "data": b"more-bytes"},
+            {
+                "type": "WordBoundary",
+                "offset": 4_000_000,  # → 0.4s
+                "duration": 3_000_000,  # → 0.3s
+                "text": "yourself",  # word chars only
+            },
+            {
+                "type": "WordBoundary",
+                "offset": 8_000_000,
+                "duration": 500_000,
+                "text": ",",  # punctuation-only: dropped
+            },
+        ]:
+            yield chunk
+
+
+@pytest.mark.asyncio
+async def test_edge_tts_collects_word_timings(monkeypatch):
+    """WordBoundary events become exact second-based word timings."""
+    import edge_tts
+
+    monkeypatch.setattr(edge_tts, "Communicate", _FakeEdgeCommunicate)
+
+    audio = await EdgeTTSProvider().synthesize("brace yourself")
+
+    assert audio.audio_bytes == b"mp3-bytes-more-bytes"
+    assert audio.word_timings is not None
+    assert [(t.text, t.start, t.end) for t in audio.word_timings] == [
+        ("brace", pytest.approx(0.1), pytest.approx(0.3)),
+        ("yourself", pytest.approx(0.4), pytest.approx(0.7)),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_edge_tts_requests_word_boundaries(monkeypatch):
+    """Synthesis asks the service for word-level boundary metadata."""
+    import edge_tts
+
+    captured = {}
+
+    class CapturingCommunicate(_FakeEdgeCommunicate):
+        def __init__(self, text, voice, **kwargs):
+            captured.update(kwargs)
+            super().__init__(text, voice, **kwargs)
+
+    monkeypatch.setattr(edge_tts, "Communicate", CapturingCommunicate)
+    await EdgeTTSProvider().synthesize("hello")
+    assert captured.get("boundary") == "WordBoundary"
+
+
+@pytest.mark.asyncio
+async def test_edge_tts_word_timings_none_without_boundaries(monkeypatch):
+    """No WordBoundary events (older edge-tts) -> timings stay None."""
+    import edge_tts
+
+    class AudioOnlyCommunicate:
+        def __init__(self, text: str, voice: str, **kwargs):
+            pass
+
+        async def stream(self):
+            yield {"type": "audio", "data": b"mp3"}
+
+    monkeypatch.setattr(edge_tts, "Communicate", AudioOnlyCommunicate)
+    audio = await EdgeTTSProvider().synthesize("hello")
+    assert audio.word_timings is None
+
+
 @pytest.mark.asyncio
 async def test_tiktok_falls_back_to_edge(monkeypatch):
     """Broken TikTok endpoints degrade to edge-tts instead of failing."""
