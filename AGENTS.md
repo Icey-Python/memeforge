@@ -13,6 +13,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 
 - `web/src/hooks/query/keys.ts` is a query-key factory that no component imports; nodes use inline array keys (`['model-catalog']`, …). Follow the inline style.
 - `web/.next/` build output is committed-adjacent clutter — never grep it; search `web/src` only.
+- Studio canvas reveal animations (globals.css `.node-reveal`) must target the node's inner content (`.react-flow__node.node-reveal > *`), never the wrapper — the wrapper carries the inline positioning transform.
+- Studio node visibility is gated by `studioStage()` in `web/src/store/pipeline.ts`; React Flow graph state stays in `meme-canvas.tsx` (display-filtered), don't move it into the store.
 
 ## Maintaining this file
 
