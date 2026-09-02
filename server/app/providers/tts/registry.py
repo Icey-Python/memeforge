@@ -6,13 +6,19 @@ from fastapi import HTTPException
 
 from app.providers.tts.base import BaseTTSProvider, Voice
 from app.providers.tts.edge import EdgeTTSProvider
+from app.providers.tts.google import GoogleTTSProvider
+from app.providers.tts.meme_classic import MemeClassicTTSProvider
+from app.providers.tts.tiktok import TikTokTTSProvider
 from app.providers.tts.azure import AzureTTSProvider
 from app.providers.tts.elevenlabs import ElevenLabsProvider
-from app.providers.tts.tiktok import TikTokTTSProvider
 
 _REGISTRY: Dict[str, Type[BaseTTSProvider]] = {
+    # Free engines first; meme_classic (Brian & the classic cast) is the
+    # flagship free meme-voice engine, tiktok is legacy/best-effort.
     "edge": EdgeTTSProvider,
+    "meme_classic": MemeClassicTTSProvider,
     "tiktok": TikTokTTSProvider,
+    "google": GoogleTTSProvider,
     "azure": AzureTTSProvider,
     "elevenlabs": ElevenLabsProvider,
 }

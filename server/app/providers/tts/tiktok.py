@@ -1,15 +1,26 @@
-"""TikTok TTS provider (FREE, no API key).
+"""TikTok TTS provider (FREE, no API key) — LEGACY / best-effort.
 
 Drives TikTok's internal text-to-speech service — the voices behind the
 classic "TikTok voice" memes — via the same unauthenticated WXA endpoint
 their in-app video editor uses. Returns mp3 audio.
 
-No credentials are needed, which makes this perfect for meme drafting.
-It is an unofficial endpoint though: it can be rate-limited, regional, or
-change without notice (the mirrors occasionally answer 404 for a while),
-so for production renders with an SLA prefer `edge` / `azure` /
-`elevenlabs`. If every mirror fails, self-host a WXA proxy worker and
-point `MEMEFORGE_TIKTOK_TTS_URLS` at it.
+No credentials are needed... in theory. In practice the unauthenticated
+mirrors are increasingly unstable (404 / 403 / empty data for anonymous
+clients), so this provider is now best-effort:
+
+- Setting ``TIKTOK_SESSION_ID`` (or ``MEMEFORGE_TIKTOK_SESSION_ID``) in
+  ``.env`` sends a logged-in ``sessionid`` cookie, which restores access
+  on mirrors that reject anonymous traffic.
+- When every mirror still fails, synthesis **automatically falls back**
+  to Edge-TTS and then to the classic Brian voice (Meme Classic), so a
+  flaky TikTok endpoint never kills the pipeline. The returned audio
+  carries the provider that actually produced it.
+
+For reliable free meme voices use the ``meme_classic`` (Brian & co.) or
+``google`` providers instead; for production renders with an SLA prefer
+``edge`` / ``azure`` / ``elevenlabs``. To force TikTok-only behavior,
+self-host a WXA proxy worker and point ``MEMEFORGE_TIKTOK_TTS_URLS`` at
+it — the automatic fallback only triggers when all mirrors fail.
 
 Meme voice catalog (TikTok speaker ids):
 
@@ -23,12 +34,23 @@ The endpoint ignores rate/pitch (accepted for API compatibility).
 """
 
 import base64
-from typing import Any, List, Optional
+import logging
+from typing import Any, Dict, List, Optional
 
 import httpx
 
 from app.core import settings
-from app.providers.tts.base import BaseTTSProvider, SynthesizedAudio, Voice
+from app.providers.tts.base import (
+    BaseTTSProvider,
+    SynthesizedAudio,
+    Voice,
+    chunk_text,
+)
+from app.providers.tts.edge import EdgeTTSProvider
+from app.providers.tts.meme_classic import MemeClassicTTSProvider
+
+# Re-exported for callers/tests that import chunk_text from this module.
+__all__ = ["TikTokTTSProvider", "chunk_text"]
 
 # Known mirrors of the WXA endpoint; the first is tried, then fallbacks.
 _DEFAULT_ENDPOINTS = [
@@ -86,25 +108,6 @@ VOICE_CATALOG: List[Voice] = [
 ]
 
 
-def chunk_text(text: str, limit: int = _MAX_TEXT_LEN) -> List[str]:
-    """Split text into endpoint-sized chunks (on word boundaries)."""
-    text = text.strip()
-    if len(text) <= limit:
-        return [text] if text else []
-    chunks: List[str] = []
-    cur = ""
-    for word in text.split():
-        candidate = f"{cur} {word}".strip()
-        if len(candidate) > limit and cur:
-            chunks.append(cur)
-            cur = word
-        else:
-            cur = candidate
-    if cur:
-        chunks.append(cur)
-    return chunks
-
-
 class TikTokTTSProvider(BaseTTSProvider):
     name = "tiktok"
 
@@ -127,22 +130,67 @@ class TikTokTTSProvider(BaseTTSProvider):
         chunks = chunk_text(text)
         if not chunks:
             raise ValueError("TikTok TTS got empty text")
-        audio = b"".join([await self._synthesize_chunk(c) for c in chunks])
-        return SynthesizedAudio(
-            audio_bytes=audio,
-            format="mp3",
-            voice=self.voice,
-            provider=self.name,
+        try:
+            audio = b"".join([await self._synthesize_chunk(c) for c in chunks])
+            return SynthesizedAudio(
+                audio_bytes=audio,
+                format="mp3",
+                voice=self.voice,
+                provider=self.name,
+            )
+        except Exception as exc:  # noqa: BLE001 - degrade, don't fail the render
+            return await self._fallback_synthesize(text, rate, pitch, cause=exc)
+
+    async def _fallback_synthesize(
+        self, text: str, rate: str, pitch: str, cause: Exception
+    ) -> SynthesizedAudio:
+        """Keep the pipeline alive when every TikTok mirror is down.
+
+        The WXA mirrors are unofficial and frequently reject anonymous
+        traffic (403/404), so failed TikTok synthesis degrades to free
+        alternatives instead of failing the render: Edge-TTS first (neural,
+        rate/pitch aware), then the iconic Brian voice. The returned audio
+        carries the provider that actually produced it.
+        """
+        logging.getLogger("memeforge").warning(
+            "TikTok TTS failed (voice %s): %s — falling back to edge-tts "
+            "then Brian (meme_classic)",
+            self.voice,
+            cause,
         )
+        for fallback_cls in (EdgeTTSProvider, MemeClassicTTSProvider):
+            try:
+                provider = fallback_cls()  # provider default voice
+                return await provider.synthesize(text, rate=rate, pitch=pitch)
+            except Exception:  # noqa: BLE001 - try the next fallback
+                continue
+        raise RuntimeError(
+            f"TikTok TTS failed for voice {self.voice} and both free "
+            f"fallbacks (edge-tts, meme_classic) failed too. "
+            f"Original error: {cause}"
+        )
+
+    def _session_cookies(self) -> Optional[Dict[str, str]]:
+        """Logged-in session cookie, when TIKTOK_SESSION_ID is configured.
+
+        Anonymous WXA calls are often 403-rejected; a valid `sessionid`
+        cookie (from a logged-in tiktok.com browser session) restores
+        access on those mirrors.
+        """
+        session_id = (settings.TIKTOK_SESSION_ID or "").strip()
+        return {"sessionid": session_id} if session_id else None
 
     async def _synthesize_chunk(self, text: str) -> bytes:
         """POST one text chunk to the WXA endpoint, trying mirror fallbacks."""
         payload = {"text": text, "speaker": self.voice}
+        cookies = self._session_cookies()
         last_exc: Optional[Exception] = None
         for url in self._endpoints():
             try:
                 async with httpx.AsyncClient(timeout=60.0) as client:
-                    resp = await client.post(url, json=payload, headers=_HEADERS)
+                    resp = await client.post(
+                        url, json=payload, headers=_HEADERS, cookies=cookies
+                    )
                 if resp.status_code != 200:
                     raise RuntimeError(
                         f"TikTok TTS endpoint returned HTTP {resp.status_code}"
