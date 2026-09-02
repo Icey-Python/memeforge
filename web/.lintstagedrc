@@ -1,0 +1,8 @@
+{
+    "*/**/*.{js,jsx,ts,tsx}": [
+        "pnpm exec biome check --write"
+    ],
+    "*/**/*.{json,css,md}": [
+        "pnpm exec biome format --write"
+    ]
+}
