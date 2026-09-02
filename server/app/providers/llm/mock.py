@@ -5,8 +5,13 @@ tests so the pipeline works end-to-end without any model or API key.
 """
 
 import random
+from typing import List
 
-from app.providers.llm.base import BaseLLMProvider, GeneratedScript
+from app.providers.llm.base import (
+    BaseLLMProvider,
+    DiscoveredModel,
+    GeneratedScript,
+)
 
 _OPENERS = [
     "Nobody asked, but here's the truth about",
@@ -30,6 +35,15 @@ class MockLLMProvider(BaseLLMProvider):
 
     def is_configured(self) -> bool:
         return True
+
+    async def list_models(self) -> List[DiscoveredModel]:
+        """The stub is always "installed" — no daemon to query."""
+        return [
+            DiscoveredModel(
+                id="memeforge-stub",
+                label="memeforge-stub (deterministic offline stub)",
+            )
+        ]
 
     async def generate_script(
         self, topic: str, tone: str = "reddit-commenter", max_lines: int = 8

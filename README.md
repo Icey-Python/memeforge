@@ -54,7 +54,8 @@ public-domain clips.
 
 ## The studio pipeline
 
-1. **Model Connector** — pick an LLM provider + model (mock works offline)
+1. **Model Connector** — pick an LLM provider + model (live model discovery from
+   Ollama / OpenAI-compatible endpoints; mock works offline)
 2. **Topic / Prompt** — topic, tone, one-click idea chips → *Generate script*
 3. **Script** — editable punchline-structured lines, word counts
 4. **Voiceover / TTS** — provider + voice, free by default
@@ -67,6 +68,7 @@ public-domain clips.
 | --- | --- |
 | `GET /health` | liveness + ffmpeg/edge-tts capability probe |
 | `GET /api/v1/models` | available LLM providers |
+| `POST /api/v1/models/discover` | live model list for a provider (Ollama `/api/tags`, OpenAI-compatible `/v1/models`) |
 | `POST /api/v1/generate-script` | topic → meme script (mock/openai-compatible/ollama) |
 | `GET /api/v1/voices?provider=edge` | TTS voice catalog |
 | `POST /api/v1/tts` | synthesize one line → audio url |

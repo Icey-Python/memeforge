@@ -7,24 +7,29 @@ export const LLM_PROVIDERS: {
 	label: string;
 	hint: string;
 	defaultModel: string;
+	/** Pre-filled base URL (Ollama default); blank falls back to server .env. */
+	defaultBaseUrl: string;
 }[] = [
 	{
 		id: 'mock',
 		label: 'Mock (offline)',
 		hint: 'Deterministic stub — no model required',
-		defaultModel: 'memeforge-stub'
+		defaultModel: 'memeforge-stub',
+		defaultBaseUrl: ''
 	},
 	{
 		id: 'openai',
 		label: 'OpenAI-compatible',
 		hint: 'OpenAI, OpenRouter, LM Studio, vLLM…',
-		defaultModel: 'gpt-4o-mini'
+		defaultModel: 'gpt-4o-mini',
+		defaultBaseUrl: ''
 	},
 	{
 		id: 'ollama',
 		label: 'Ollama (local)',
 		hint: 'Local models via your Ollama daemon',
-		defaultModel: 'llama3.2'
+		defaultModel: 'llama3.2',
+		defaultBaseUrl: 'http://localhost:11434'
 	}
 ];
 

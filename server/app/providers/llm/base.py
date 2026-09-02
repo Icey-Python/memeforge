@@ -15,6 +15,19 @@ class GeneratedScript(BaseModel):
     lines: List[str]
 
 
+class DiscoveredModel(BaseModel):
+    """A model served by a provider endpoint (live discovery)."""
+
+    id: str  # exact model name to send back to the provider
+    label: str = ""  # display label for dropdowns
+    size_bytes: Optional[int] = None
+    family: Optional[str] = None
+    parameter_size: Optional[str] = None
+    quantization: Optional[str] = None
+    modified_at: Optional[str] = None
+    available: bool = True
+
+
 class BaseLLMProvider:
     """Contract for model connectors (OpenAI-compatible, Ollama, ...)."""
 
@@ -30,6 +43,15 @@ class BaseLLMProvider:
         self, topic: str, tone: str = "reddit-commenter", max_lines: int = 8
     ) -> GeneratedScript:
         """Generate a short punchy script about `topic`."""
+        raise NotImplementedError
+
+    async def list_models(self) -> List[DiscoveredModel]:
+        """Discover the models this connector's endpoint currently serves.
+
+        Powers `/api/v1/models/discover` (Ollama `/api/tags`, OpenAI-
+        compatible `GET /models`). Raises on connectivity/HTTP errors;
+        the endpoint reports those as `reachable: false`.
+        """
         raise NotImplementedError
 
     def is_configured(self) -> bool:

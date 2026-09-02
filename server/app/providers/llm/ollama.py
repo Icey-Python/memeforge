@@ -5,12 +5,16 @@ https://github.com/ollama/ollama/blob/main/docs/api.md
 """
 
 import json
-from typing import Optional
+from typing import List, Optional
 
 import httpx
 
 from app.core import settings
-from app.providers.llm.base import BaseLLMProvider, GeneratedScript
+from app.providers.llm.base import (
+    BaseLLMProvider,
+    DiscoveredModel,
+    GeneratedScript,
+)
 
 
 class OllamaProvider(BaseLLMProvider):
@@ -25,6 +29,36 @@ class OllamaProvider(BaseLLMProvider):
 
     def is_configured(self) -> bool:
         return bool(self.base_url)
+
+    async def list_models(self) -> List[DiscoveredModel]:
+        """Live model discovery via Ollama's native /api/tags endpoint."""
+        if not self.is_configured():
+            raise RuntimeError("Ollama provider has no base URL configured")
+
+        url = f"{self.base_url.rstrip('/')}/api/tags"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+
+        models: List[DiscoveredModel] = []
+        for item in data.get("models", []):
+            name = str(item.get("name") or item.get("model") or "").strip()
+            if not name:
+                continue
+            details = item.get("details") or {}
+            models.append(
+                DiscoveredModel(
+                    id=name,
+                    label=name,
+                    size_bytes=item.get("size"),
+                    family=details.get("family"),
+                    parameter_size=details.get("parameter_size"),
+                    quantization=details.get("quantization_level"),
+                    modified_at=item.get("modified_at"),
+                )
+            )
+        return models
 
     async def generate_script(
         self, topic: str, tone: str = "reddit-commenter", max_lines: int = 8

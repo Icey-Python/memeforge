@@ -18,6 +18,29 @@ export interface ModelCatalogEntry {
 	configured: boolean;
 }
 
+export interface DiscoveredModel {
+	/** Exact model name to send back to the provider. */
+	id: string;
+	/** Display label for dropdowns. */
+	label: string;
+	size_bytes: number | null;
+	family: string | null;
+	parameter_size: string | null;
+	quantization: string | null;
+	modified_at: string | null;
+	available: boolean;
+}
+
+export interface ModelDiscoveryResult {
+	provider: string;
+	base_url: string | null;
+	/** False when the provider endpoint could not be queried (daemon down,
+	 * bad URL, auth failure) — `error` carries the reason. */
+	reachable: boolean;
+	error: string | null;
+	models: DiscoveredModel[];
+}
+
 export interface GameplayClip {
 	id: string;
 	label: string;
