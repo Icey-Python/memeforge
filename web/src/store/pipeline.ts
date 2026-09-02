@@ -44,6 +44,7 @@ interface PipelineStore {
 
 const VOICE_DEFAULTS: Record<TTSProviderId, string> = {
 	edge: 'en-US-ChristopherNeural',
+	tiktok: 'en_us_002',
 	azure: 'en-US-ChristopherNeural',
 	elevenlabs: '21m00Tcm4TlvDq8ikWAM'
 };

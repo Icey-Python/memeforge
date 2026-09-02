@@ -25,7 +25,7 @@ async def list_gameplay_clips():
 async def start_render(
     request: RenderRequest, background_tasks: BackgroundTasks
 ):
-    """Queue a split-screen vertical video render as a background job."""
+    """Queue a full-screen vertical video render as a background job."""
     if not compositor.ffmpeg_available():
         raise HTTPException(
             status_code=503,

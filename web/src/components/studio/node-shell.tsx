@@ -118,12 +118,19 @@ export function StudioSelect({
 	value,
 	onChange,
 	options,
+	groups,
 	placeholder
 }: {
 	id?: string;
 	value: string;
 	onChange: (value: string) => void;
-	options: { value: string; label: string; disabled?: boolean }[];
+	/** flat option list (used instead of `groups`) */
+	options?: { value: string; label: string; disabled?: boolean }[];
+	/** grouped options rendered as <optgroup> categories */
+	groups?: {
+		label: string;
+		options: { value: string; label: string; disabled?: boolean }[];
+	}[];
 	placeholder?: string;
 }) {
 	return (
@@ -134,10 +141,19 @@ export function StudioSelect({
 			className="h-9 w-full cursor-pointer appearance-none rounded-md border border-input bg-background px-3 pr-8 text-sm shadow-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
 		>
 			{placeholder && <option value="">{placeholder}</option>}
-			{options.map((opt) => (
+			{options?.map((opt) => (
 				<option key={opt.value} value={opt.value} disabled={opt.disabled}>
 					{opt.label}
 				</option>
+			))}
+			{groups?.map((group) => (
+				<optgroup key={group.label} label={group.label}>
+					{group.options.map((opt) => (
+						<option key={opt.value} value={opt.value} disabled={opt.disabled}>
+							{opt.label}
+						</option>
+					))}
+				</optgroup>
 			))}
 		</select>
 	);

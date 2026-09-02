@@ -8,9 +8,11 @@ from app.providers.tts.base import BaseTTSProvider, Voice
 from app.providers.tts.edge import EdgeTTSProvider
 from app.providers.tts.azure import AzureTTSProvider
 from app.providers.tts.elevenlabs import ElevenLabsProvider
+from app.providers.tts.tiktok import TikTokTTSProvider
 
 _REGISTRY: Dict[str, Type[BaseTTSProvider]] = {
     "edge": EdgeTTSProvider,
+    "tiktok": TikTokTTSProvider,
     "azure": AzureTTSProvider,
     "elevenlabs": ElevenLabsProvider,
 }

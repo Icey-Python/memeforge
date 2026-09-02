@@ -41,6 +41,12 @@ export const TTS_PROVIDERS: {
 		free: true
 	},
 	{
+		id: 'tiktok',
+		label: 'TikTok Meme Voices',
+		hint: 'Jessie, Ghostface, Trickster…',
+		free: true
+	},
+	{
 		id: 'azure',
 		label: 'Azure Speech',
 		hint: 'Paid tier — same voices, SLA',
@@ -59,46 +65,110 @@ export const EDGE_VOICES: VoiceOption[] = [
 		id: 'en-US-ChristopherNeural',
 		label: 'Christopher',
 		language: 'en-US',
-		gender: 'male'
+		gender: 'male',
+		tags: ['meme', 'narration']
 	},
-	{ id: 'en-US-GuyNeural', label: 'Guy', language: 'en-US', gender: 'male' },
-	{ id: 'en-US-EricNeural', label: 'Eric', language: 'en-US', gender: 'male' },
+	{
+		id: 'en-US-GuyNeural',
+		label: 'Guy',
+		language: 'en-US',
+		gender: 'male',
+		tags: ['meme', 'energetic']
+	},
+	{
+		id: 'en-US-EricNeural',
+		label: 'Eric',
+		language: 'en-US',
+		gender: 'male',
+		tags: ['meme', 'casual']
+	},
 	{
 		id: 'en-US-RogerNeural',
 		label: 'Roger',
 		language: 'en-US',
-		gender: 'male'
+		gender: 'male',
+		tags: ['deadpan']
 	},
 	{
 		id: 'en-US-JennyNeural',
 		label: 'Jenny',
 		language: 'en-US',
-		gender: 'female'
+		gender: 'female',
+		tags: ['meme', 'narration']
 	},
 	{
 		id: 'en-US-MichelleNeural',
 		label: 'Michelle',
 		language: 'en-US',
-		gender: 'female'
+		gender: 'female',
+		tags: ['casual']
 	},
-	{ id: 'en-GB-RyanNeural', label: 'Ryan', language: 'en-GB', gender: 'male' },
+	{
+		id: 'en-GB-RyanNeural',
+		label: 'Ryan',
+		language: 'en-GB',
+		gender: 'male',
+		tags: ['meme']
+	},
 	{
 		id: 'en-GB-SoniaNeural',
 		label: 'Sonia',
 		language: 'en-GB',
-		gender: 'female'
+		gender: 'female',
+		tags: ['narration']
 	},
 	{
 		id: 'en-AU-NatashaNeural',
 		label: 'Natasha',
 		language: 'en-AU',
-		gender: 'female'
+		gender: 'female',
+		tags: ['casual']
 	},
 	{
 		id: 'en-IE-EmilyNeural',
 		label: 'Emily',
 		language: 'en-IE',
-		gender: 'female'
+		gender: 'female',
+		tags: ['deadpan']
+	}
+];
+
+/** Classic TikTok meme voices (free, keyless — mirrors the backend catalog). */
+export const TIKTOK_VOICES: VoiceOption[] = [
+	{
+		id: 'en_us_002',
+		label: 'Jessie — classic TikTok voice',
+		language: 'en-US',
+		gender: 'female',
+		tags: ['meme']
+	},
+	{
+		id: 'en_male_cody',
+		label: 'Serious Male (Cody)',
+		language: 'en-US',
+		gender: 'male',
+		tags: ['meme', 'narration']
+	},
+	{
+		id: 'en_male_narration',
+		label: 'Narrator',
+		language: 'en-US',
+		gender: 'male',
+		tags: ['meme', 'narration']
+	},
+	{
+		id: 'en_us_ghostface',
+		label: 'Ghostface (Scream)',
+		language: 'en-US',
+		gender: 'male',
+		tags: ['meme']
+	},
+	{
+		id: 'en_us_trickster',
+		label: 'Trickster',
+		language: 'en-US',
+		gender: 'male',
+		tags: ['meme']
 	}
 ];
 

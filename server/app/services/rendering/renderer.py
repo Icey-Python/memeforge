@@ -4,14 +4,19 @@ Runs a full pipeline as a background job:
 
     script lines ──▶ TTS per line ──▶ concat voiceover ──▶ ffmpeg compositor ──▶ mp4
         │                                                        ▲
-        ├──▶ kinetic caption timeline ──────────────────────────┘
-        └──▶ Reddit-style card (Pillow) ──▶ top frame
+        ├──▶ kinetic caption timeline (center frame) ──────────┤
+        └──▶ floating Reddit post card (Pillow) ──▶ upper-center overlay
 
-The job store tracks progress; the frontend Preview & Export node polls
-`GET /api/v1/render/{job_id}` until status is completed/failed.
+The gameplay loop fills the full 1080x1920 vertical frame; the Reddit
+post card floats upper-center and fades out once the hook (first line)
+has landed. The job store tracks progress; the frontend Preview &
+Export node polls `GET /api/v1/render/{job_id}` until status is
+completed/failed.
 """
 
 import asyncio
+import hashlib
+import re
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Sequence
@@ -59,6 +64,23 @@ def _find_sfx() -> Optional[Path]:
         if candidate.suffix.lower() in {".mp3", ".wav", ".ogg", ".m4a", ".aac"}:
             return candidate
     return None
+
+
+def _subreddit_handle(topic: str) -> str:
+    """r/ handle for the floating card, derived from the topic."""
+    slug = re.sub(r"[^a-z0-9]+", "", (topic or "").lower())[:20]
+    return f"r/{slug}" if slug else "r/gaming"
+
+
+def _viral_metrics(seed: str) -> dict:
+    """Deterministic, plausible-looking like/comment/share/award counts."""
+    n = int(hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12], 16)
+    return {
+        "upvotes": 3_000 + n % 480_000,
+        "comments": 80 + (n >> 12) % 4_000,
+        "shares": 40 + (n >> 24) % 9_000,
+        "awards": 2 + (n >> 28) % 3,
+    }
 
 
 async def run_render_job(job_id: str, request: RenderRequest) -> None:
@@ -120,17 +142,28 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
             request.script, line_durations, punchline_indexes=punchlines
         )
 
-        card = compositor.build_reddit_card(
-            title=request.title or request.topic or "r/gaming",
-            topic=request.topic or "memeforge",
+        title = request.title or request.topic or "r/gaming"
+        card = compositor.build_reddit_post_card(
+            title=title,
             out_path=workdir / "card.png",
+            handle=_subreddit_handle(request.topic or title),
+            **_viral_metrics(title),
         )
 
         # Pre-render kinetic caption PNGs (Pillow) before the ffmpeg pass.
         caption_pngs = compositor.render_caption_pngs(captions, workdir)
 
+        # Card stays on screen through the hook (first line), then fades —
+        # clamped to the 3-5s window that performs best on shorts feeds.
+        card_duration = None
+        if line_durations:
+            card_duration = min(
+                max(line_durations[0] + 0.5, compositor.CARD_MIN_DISPLAY_S),
+                compositor.CARD_MAX_DISPLAY_S,
+            )
+
         # --- 4. Compose -----------------------------------------------------------
-        store.update(job_id, progress=0.6, message="Composing split-screen video")
+        store.update(job_id, progress=0.6, message="Composing full-screen video")
         sfx = _find_sfx() if request.sfx_on_punchlines else None
         sfx_events = (
             [captions[-1].start] if sfx and captions else None
@@ -138,14 +171,15 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
 
         output = settings.OUTPUT_DIR / f"{job_id}.mp4"
         cmd = compositor.compose_video(
-            card_path=card,
             gameplay_path=gameplay,
             voiceover_path=voiceover,
             captions=captions,
             output_path=output,
+            card_path=card,
             caption_pngs=caption_pngs,
             sfx_path=sfx,
             sfx_events=sfx_events,
+            card_duration=card_duration,
         )
         await compositor.run_ffmpeg(cmd)
 

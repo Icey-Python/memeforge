@@ -1,18 +1,24 @@
 # memeforge
 
 AI-powered Reddit-style meme video generator. Turn a topic into a
-vertical 1080×1920 "gameplay split-screen" short — r/gaming card on top,
-satisfying gameplay loop below, kinetic captions, free neural voiceover.
+vertical 1080×1920 viral-style short — full-screen gameplay loop, a
+floating Reddit post card, kinetic captions, free meme voiceover.
 
 ```
-┌─────────────────────────┐
-│   r/gaming meme card    │  ← Pillow-rendered Reddit post (title, upvotes)
-├─────────────────────────┤
-│   KINETIC CAPTIONS      │  ← 1–2 words/frame, heavy stroke, punchline pop
-│                         │
-│   gameplay loop         │  ← minecraft parkour, subway surfers, GTA stunts…
-└─────────────────────────┘
-     + edge-tts voiceover, optional punchline SFX 💥
+┌───────────────────────────────┐
+│  ╭─────────────────────╮      │  ← floating Reddit post card
+│  │ ⬤ r/gaming ✔ 🏆 ✨ │      │    (avatar + handle + verified +
+│  │  BOLD POST TITLE     │      │     awards + title + metrics),
+│  │  ♥ 45.2K 💬 891  ↗ │      │     fades out after the hook
+│  ╰─────────────────────╯      │
+│                               │
+│         KINETIC               │  ← 1–2 words/frame, dead center,
+│         CAPTIONS              │    heavy stroke, punchline pop
+│                               │
+│        gameplay loop          │  ← FULL-SCREEN 1080×1920 background
+│        (edge to edge)         │    (minecraft parkour, GTA stunts…)
+└───────────────────────────────┘
+   + TikTok meme voices / edge-tts voiceover, punchline SFX 💥
 ```
 
 ## Monorepo layout
@@ -20,7 +26,7 @@ satisfying gameplay loop below, kinetic captions, free neural voiceover.
 | Path | What |
 | --- | --- |
 | `web/` | Next.js 16 App Router studio — React Flow canvas with modular nodes (Model Connector → Topic → Script → Voiceover → Preview, plus Gameplay), dark sleek UI |
-| `server/` | FastAPI backend — LLM script generation (OpenAI-compatible / Ollama / mock), TTS (edge-tts free default, Azure, ElevenLabs), async ffmpeg render jobs |
+| `server/` | FastAPI backend — LLM script generation (OpenAI-compatible / Ollama / mock), TTS (edge-tts free default, TikTok meme voices, Azure, ElevenLabs), async ffmpeg render jobs |
 
 ## Quickstart
 
@@ -42,7 +48,8 @@ Or run both at once: `./scripts/dev.sh`.
 
 Zero-config demo: the default **Mock** LLM provider works offline, and
 **edge-tts** needs no API key — the whole topic → script → voiceover →
-render pipeline runs without any credentials.
+render pipeline runs without any credentials. The **TikTok meme voices**
+provider (Jessie, Ghostface, Trickster…) is free and keyless too.
 
 ### Gameplay clips
 
@@ -57,7 +64,8 @@ public-domain clips.
 1. **Model Connector** — pick an LLM provider + model (mock works offline)
 2. **Topic / Prompt** — topic, tone, one-click idea chips → *Generate script*
 3. **Script** — editable punchline-structured lines, word counts
-4. **Voiceover / TTS** — provider + voice, free by default
+4. **Voiceover / TTS** — provider + voice, free by default (TikTok meme
+   voices come with direct per-voice previews)
 5. **Gameplay / Background** — pick a gameplay loop with asset status
 6. **Preview & Export** — readiness checklist → render → inline player
 
@@ -68,7 +76,7 @@ public-domain clips.
 | `GET /health` | liveness + ffmpeg/edge-tts capability probe |
 | `GET /api/v1/models` | available LLM providers |
 | `POST /api/v1/generate-script` | topic → meme script (mock/openai-compatible/ollama) |
-| `GET /api/v1/voices?provider=edge` | TTS voice catalog |
+| `GET /api/v1/voices?provider=edge` | TTS voice catalog (`edge\|tiktok\|azure\|elevenlabs`) |
 | `POST /api/v1/tts` | synthesize one line → audio url |
 | `GET /api/v1/render/gameplays` | gameplay clip catalog + availability |
 | `POST /api/v1/render` | queue a render job (async) |
@@ -79,10 +87,11 @@ Interactive docs: http://localhost:8000/docs.
 ## Architecture notes
 
 - **Render pipeline** — per-line TTS → duration probing (ffprobe) → caption
-  timeline → Pillow caption PNGs + Reddit card → ffmpeg `overlay`/`vstack`
-  compositor → H.264 1080×1920. Captions deliberately avoid ffmpeg's
-  optional `drawtext` filter (absent from Homebrew builds) — works on any
-  ffmpeg.
+  timeline → Pillow caption PNGs + floating Reddit post card → ffmpeg
+  full-screen `overlay` compositor (gameplay fills the whole 1080×1920
+  frame; the card floats upper-center and fades after the hook) → H.264.
+  Captions deliberately avoid ffmpeg's optional `drawtext` filter (absent
+  from Homebrew builds) — works on any ffmpeg.
 - **Resilience** — per-line TTS timeout + retries, ffmpeg/ffprobe subprocess
   timeouts, in-memory job store with progress polling.
 - **CORS** — any `localhost`/`127.0.0.1` origin allowed in dev; set

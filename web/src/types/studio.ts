@@ -1,7 +1,7 @@
 /** Shared types for the memeforge studio pipeline. */
 
 export type LLMProviderId = 'openai' | 'ollama' | 'mock';
-export type TTSProviderId = 'edge' | 'azure' | 'elevenlabs';
+export type TTSProviderId = 'edge' | 'tiktok' | 'azure' | 'elevenlabs';
 export type RenderJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
 export interface ModelConfig {
@@ -32,6 +32,8 @@ export interface VoiceOption {
 	label: string;
 	language: string;
 	gender: string;
+	/** category tags from the backend (e.g. 'meme') for grouping */
+	tags?: string[];
 }
 
 export interface ScriptResponse {

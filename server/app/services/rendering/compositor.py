@@ -1,27 +1,42 @@
-"""FFmpeg split-screen compositor.
+"""FFmpeg full-screen vertical compositor.
 
-Builds and runs the ffmpeg command that turns (reddit card, gameplay loop,
-voiceover, caption timeline) into a vertical 1080x1920 short:
+Builds and runs the ffmpeg command that turns (gameplay loop, floating
+Reddit post card, voiceover, caption timeline) into a vertical
+1080x1920 short in the authentic viral Reddit/TikTok layout:
 
-    +------------------+  \
-    |  Reddit-style    |  | top frame (1080x960): meme card image
-    |  meme card       |  |
-    +------------------+  / center: kinetic captions (1-2 words/frame,
-    |                  |  \         heavy stroke, punchlines punch harder)
-    |  Gameplay loop   |  | bottom frame (1080x1920): endless gameplay
-    +------------------+  /
+    ┌───────────────────────────────┐
+    │   ╭─────────────────────╮     │  floating Reddit post card
+    │   │ ⬤ r/gaming ✔ 🏆 ✨ │     │  (avatar + handle + verified +
+    │   │  BOLD POST TITLE     │     │   awards + metrics), pinned
+    │   │  ♥ 24.5K  💬 891  ↗ │     │   ~15% from the top, fades out
+    │   ╰─────────────────────╯     │  after the hook line lands
+    │                               │
+    │        KINETIC                │  1-2 words per frame, dead
+    │        CAPTIONS               │  center of the frame, massive
+    │        1-2 WORDS              │  bold font + heavy black stroke
+    │                               │
+    │      gameplay loop            │  FULL-SCREEN background: the
+    │      (fills the whole         │  loop is scaled to cover the
+    │      1080×1920 frame,         │  entire 9:16 frame edge-to-edge
+    │      edge to edge)            │  behind the card + captions
+    └───────────────────────────────┘
 
-Captions are pre-rendered as transparent PNGs with Pillow and composited
-with the `overlay` filter — deliberately avoiding `drawtext`, which needs
-an ffmpeg built with libfreetype (Homebrew's is not). `moviepy` is an
-acceptable alternative wrapper for complex effects; ffmpeg filter graphs
-are used here because they are fast, dependency-light, and deterministic.
+The gameplay loop fills the full vertical frame via
+`scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920`
+(no 50/50 split, no static top section). The Reddit card and each
+caption frame are pre-rendered as transparent PNGs with Pillow and
+composited with the `overlay` filter — deliberately avoiding `drawtext`,
+which needs an ffmpeg built with libfreetype (Homebrew's is not).
+`moviepy` is an acceptable alternative wrapper for complex effects;
+ffmpeg filter graphs are used here because they are fast,
+dependency-light, and deterministic.
 
 All ffmpeg/ffprobe calls run through asyncio subprocess (with timeouts)
 so renders never block or hang the event loop.
 """
 
 import asyncio
+import math
 import shutil
 from pathlib import Path
 from typing import List, Optional, Sequence
@@ -29,31 +44,45 @@ from typing import List, Optional, Sequence
 from app.core import settings
 from app.services.rendering.captions import CaptionFrame
 
-# Caption look: huge bold text with a heavy black stroke.
+# --- Caption look: massive bold text with a heavy black stroke ------------
 CAPTION_FONT_SIZE = 108
-CAPTION_STROKE_WIDTH = 12  # the "heavy stroke" meme aesthetic
+CAPTION_STROKE_WIDTH = 10  # the "heavy stroke" meme aesthetic
 CAPTION_COLOR = "white"
 CAPTION_STROKE_COLOR = "black"
 PUNCHLINE_COLOR = "FDE047"  # yellow pop on punchlines
 PUNCHLINE_FONT_SIZE = 126
 
+# --- Floating Reddit post card ---------------------------------------------
+CARD_WIDTH = 920  # of 1080 — floats with margins like the real apps
+CARD_CORNER_RADIUS = 44
+CARD_TOP_FRACTION = 0.15  # overlay y = main_h * 0.15 (upper center)
+CARD_FADE_IN_S = 0.25
+CARD_FADE_OUT_S = 0.6
+CARD_MIN_DISPLAY_S = 3.0  # hook visibility window clamp
+CARD_MAX_DISPLAY_S = 5.0
+
 # Safety timeouts so a stalled network read or subprocess can't hang a job.
 FFMPEG_TIMEOUT_S = 600.0
 FFPROBE_TIMEOUT_S = 30.0
 
+# Massive display fonts, tried in order: Impact/Anton/Montserrat Black are
+# the meme standard; Arial Bold / DejaVu Bold are the portable fallbacks.
+_FONT_CANDIDATES = [
+    settings.FONTS_DIR / "Anton-Regular.ttf",
+    settings.FONTS_DIR / "Montserrat-Black.ttf",
+    settings.FONTS_DIR / "Inter-Bold.ttf",
+    Path("/System/Library/Fonts/Supplemental/Impact.ttf"),  # macOS
+    Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf"),  # macOS
+    Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),  # Debian
+    Path("/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"),  # Arch
+]
 
-def _default_font() -> str:
-    """Best-effort bundled/system bold font path for drawtext."""
-    candidates = [
-        settings.FONTS_DIR / "Inter-Bold.ttf",
-        Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf"),  # macOS
-        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),  # Debian
-        Path("/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"),  # Arch
-    ]
-    for cand in candidates:
-        if cand.exists():
-            return str(cand)
-    return ""  # ffmpeg falls back to its built-in font
+# Color emoji fonts for the award row (best effort; vector medals fallback).
+_EMOJI_FONT_CANDIDATES = [
+    Path("/System/Library/Fonts/Apple Color Emoji.ttc"),  # macOS
+    Path("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"),  # Debian
+    Path("/usr/share/fonts/noto-color-emoji/NotoColorEmoji.ttf"),
+]
 
 
 def ffmpeg_available() -> bool:
@@ -86,86 +115,11 @@ async def probe_duration(media_path: Path) -> float:
     return float(stdout.decode().strip())
 
 
-def build_reddit_card(
-    title: str, topic: str, out_path: Path, upvotes: int = 42
-) -> Path:
-    """Render the Reddit-style meme card for the top frame.
-
-    Uses Pillow; when the caller already has a card/screenshot, it can be
-    passed to `compose_video` directly instead.
-    """
-    from PIL import Image, ImageDraw, ImageFont  # imported lazily
-
-    width, height = settings.VIDEO_WIDTH, settings.VIDEO_HEIGHT // 2
-    card = Image.new("RGB", (width, height), "#1A1A1B")
-    draw = ImageDraw.Draw(card)
-
-    font_candidates = [
-        _default_font(),
-        "DejaVuSans-Bold.ttf",
-        "Arial Bold.ttf",
-    ]
-    title_font = None
-    for cand in font_candidates:
-        if not cand:
-            continue
-        try:
-            title_font = ImageFont.truetype(cand, 52)
-            meta_font = ImageFont.truetype(cand, 30)
-            break
-        except OSError:
-            continue
-    if title_font is None:
-        title_font = ImageFont.load_default()
-        meta_font = title_font
-
-    # Upvote column + upvote count, r/gaming style.
-    orange = "#FF4500"
-    draw.rounded_rectangle(
-        [48, 96, 128, 320], radius=16, fill="#272729", outline=orange, width=2
-    )
-    draw.polygon([(88, 130), (62, 175), (114, 175)], fill=orange)
-    draw.polygon([(62, 240), (114, 240), (88, 285)], fill="#818384")
-    draw.text((50, 330), f"{upvotes // 1000}k" if upvotes >= 1000 else str(upvotes),
-              font=meta_font, fill="#D7DADC")
-
-    # Subreddit + author meta line.
-    draw.text((176, 110), f"r/gaming  ·  u/{topic.replace(' ', '_')[:24]}",
-              font=meta_font, fill="#818384")
-
-    # Title, wrapped to the card width.
-    max_width = width - 176 - 64
-    words, lines, cur = title.split(), [], ""
-    for word in words:
-        trial = f"{cur} {word}".strip()
-        if draw.textlength(trial, font=title_font) <= max_width:
-            cur = trial
-        else:
-            lines.append(cur)
-            cur = word
-    if cur:
-        lines.append(cur)
-
-    y = 176
-    for line in lines[:6]:
-        draw.text((176, y), line, font=title_font, fill="#D7DADC")
-        y += 68
-
-    card.save(out_path, format="PNG")
-    return out_path
-
-
-def _load_caption_font(size: int):
-    """Bold truetype font for captions; falls back to Pillow default."""
+def _load_font(size: int):
+    """Bold truetype font (Impact-style first); falls back to Pillow default."""
     from PIL import ImageFont
 
-    candidates = [
-        settings.FONTS_DIR / "Inter-Bold.ttf",
-        Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf"),  # macOS
-        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),  # Debian
-        Path("/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"),  # Arch
-    ]
-    for cand in candidates:
+    for cand in _FONT_CANDIDATES:
         if cand.exists():
             try:
                 return ImageFont.truetype(str(cand), size)
@@ -174,20 +128,294 @@ def _load_caption_font(size: int):
     return ImageFont.load_default()
 
 
+def _load_emoji_font(preferred_size: int):
+    """Best-effort color-emoji font; bitmap emoji fonts only allow certain
+    pixel sizes, so several candidates are tried. Returns (font, size)."""
+    from PIL import ImageFont
+
+    sizes = [preferred_size, 40, 36, 32, 109]
+    for cand in _EMOJI_FONT_CANDIDATES:
+        if not cand.exists():
+            continue
+        for size in sizes:
+            try:
+                return ImageFont.truetype(str(cand), size), size
+            except OSError:
+                continue
+    return None, 0
+
+
+# --- Reddit post card (Pillow) ---------------------------------------------
+
+def _wrap_text(draw, text: str, font, max_width: int) -> List[str]:
+    """Greedy word-wrap to `max_width` pixels."""
+    words, lines, cur = text.split(), [], ""
+    for word in words:
+        trial = f"{cur} {word}".strip()
+        if draw.textlength(trial, font=font) <= max_width:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = word
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _format_count(n: int) -> str:
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}K"
+    return str(n)
+
+
+def _handle_initial(handle: str) -> str:
+    """Avatar glyph: first letter of the subreddit/handle ('r/gaming' → G)."""
+    for part in handle.replace("@", "/").split("/"):
+        for ch in part:
+            if ch.isalpha():
+                return ch.upper()
+    return "R"
+
+
+def _draw_verified_badge(draw, cx: float, cy: float, r: float) -> None:
+    """Blue verified check circle, Twitter/Reddit style."""
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(29, 155, 240, 255))
+    width = max(3, int(r * 0.24))
+    draw.line(
+        [(cx - r * 0.42, cy + r * 0.02), (cx - r * 0.08, cy + r * 0.34)],
+        fill=(255, 255, 255, 255), width=width,
+    )
+    draw.line(
+        [(cx - r * 0.08, cy + r * 0.34), (cx + r * 0.46, cy - r * 0.3)],
+        fill=(255, 255, 255, 255), width=width,
+    )
+
+
+def _draw_medal(draw, cx: float, cy: float, r: float, fill, ring) -> None:
+    """Vector fallback for award emojis: a small medal disc + star."""
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ring)
+    inner = r * 0.78
+    draw.ellipse([cx - inner, cy - inner, cx + inner, cy + inner], fill=fill)
+    star_r = r * 0.45
+    points = []
+    for i in range(10):
+        ang = -math.pi / 2 + i * math.pi / 5
+        rad = star_r if i % 2 == 0 else star_r * 0.45
+        points.append((cx + rad * math.cos(ang), cy + rad * math.sin(ang)))
+    draw.polygon(points, fill=(255, 255, 255, 230))
+
+
+def _draw_awards(draw, x: float, cy: float, count: int, size: int = 34) -> None:
+    """Row of award emojis (🏆 🥇 ✨ 🏅); falls back to vector medals when
+    no color-emoji font is available."""
+    emojis = ["\N{TROPHY}", "\N{FIRST PLACE MEDAL}", "\N{SPARKLES}", "\N{SPORTS MEDAL}"]
+    font, font_size = _load_emoji_font(size)
+    if font is not None:
+        try:
+            for i, emoji in enumerate(emojis[:count]):
+                draw.text(
+                    (x + i * (font_size + 6), cy - font_size),
+                    emoji, font=font, embedded_color=True,
+                )
+            return
+        except Exception:  # noqa: BLE001 - emoji font quirks → medal fallback
+            pass
+    colors = [
+        ((255, 214, 10, 255), (180, 130, 10, 255)),  # gold
+        ((200, 208, 214, 255), (140, 148, 156, 255)),  # silver
+        ((205, 127, 50, 255), (150, 90, 35, 255)),  # bronze
+    ]
+    r = size / 2
+    for i in range(count):
+        fill, ring = colors[i % len(colors)]
+        _draw_medal(draw, x + i * (size + 6) + r, cy, r, fill, ring)
+
+
+def _draw_heart(draw, cx: float, cy: float, s: float) -> None:
+    """Like icon: two lobes + bottom point."""
+    fill = (255, 69, 0, 255)  # Reddit orange
+    r = s * 0.5
+    top = cy - r * 0.55
+    draw.ellipse([cx - 2 * r, top - r, cx, top + r], fill=fill)
+    draw.ellipse([cx, top - r, cx + 2 * r, top + r], fill=fill)
+    draw.polygon(
+        [(cx - 2 * r * 0.92, top + r * 0.55),
+         (cx + 2 * r * 0.92, top + r * 0.55),
+         (cx, cy + s * 1.15)],
+        fill=fill,
+    )
+
+
+def _draw_comment_bubble(draw, x: float, y: float, w: float, h: float) -> None:
+    """Comment icon: rounded speech bubble with a tail."""
+    fill = (113, 118, 123, 255)
+    draw.rounded_rectangle([x, y, x + w, y + h], radius=h / 3, fill=fill)
+    draw.polygon(
+        [(x + h * 0.35, y + h - 1), (x + h * 0.8, y + h - 1),
+         (x + h * 0.5, y + h * 1.4)],
+        fill=fill,
+    )
+
+
+def _draw_share_arrow(draw, cx: float, cy: float, s: float) -> None:
+    """Share icon: diagonal arrow (↗) with a chevron head."""
+    fill = (113, 118, 123, 255)
+    d = s * 0.9
+    width = max(3, int(s * 0.26))
+    draw.line(
+        [(cx - d * 0.55, cy + d * 0.55), (cx + d * 0.5, cy - d * 0.5)],
+        fill=fill, width=width,
+    )
+    draw.line(
+        [(cx - d * 0.05, cy - d * 0.55), (cx + d * 0.55, cy - d * 0.55)],
+        fill=fill, width=width,
+    )
+    draw.line(
+        [(cx + d * 0.55, cy - d * 0.55), (cx + d * 0.55, cy + d * 0.05)],
+        fill=fill, width=width,
+    )
+
+
+def build_reddit_post_card(
+    title: str,
+    out_path: Path,
+    handle: str = "r/gaming",
+    upvotes: int = 4200,
+    comments: int = 317,
+    shares: int = 1200,
+    awards: int = 3,
+    width: int = CARD_WIDTH,
+) -> Path:
+    """Render the floating Reddit-style post card as a transparent PNG.
+
+    The card is a clean, modern rounded rectangle meant to be overlaid on
+    the upper-center of the full-screen gameplay background: avatar +
+    subreddit/Twitter handle + verified badge + award emojis + bold post
+    title/hook + like/comment/share metrics. Everything is drawn at 2x
+    and downscaled for smooth (anti-aliased) edges.
+    """
+    from PIL import Image, ImageDraw
+
+    scale = 2  # supersample for anti-aliased corners and icons
+    pad = 44
+    avatar_r = 36
+    header_h = avatar_r * 2
+    title_size = 46
+    title_line_h = 60
+    metric_size = 30
+    handle_size = 36
+    gap_header_title = 26
+    gap_title_metrics = 24
+    metrics_h = 46
+
+    # All geometry/fonts are computed directly at the supersampled scale.
+    def S(v: float) -> float:
+        return v * scale
+
+    title_font = _load_font(S(title_size))
+    handle_font = _load_font(S(handle_size))
+    metric_font = _load_font(S(metric_size))
+
+    # Measure text with a scratch canvas.
+    probe = Image.new("RGBA", (8, 8))
+    probe_draw = ImageDraw.Draw(probe)
+    inner_w = width - pad * 2
+    title_lines = _wrap_text(probe_draw, title, title_font, S(inner_w))[:4]
+    if not title_lines:
+        title_lines = [""]
+
+    height = (
+        pad + header_h + gap_header_title
+        + len(title_lines) * title_line_h
+        + gap_title_metrics + metrics_h + pad
+    )
+
+    # Canvas with room for a soft drop shadow below the card body.
+    canvas = Image.new("RGBA", (S(width), S(height + 14)), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+
+    # Drop shadow, then the near-opaque white card body.
+    draw.rounded_rectangle(
+        [S(0), S(12), S(width - 1), S(height + 13)],
+        radius=S(CARD_CORNER_RADIUS), fill=(0, 0, 0, 70),
+    )
+    draw.rounded_rectangle(
+        [S(0), S(0), S(width - 1), S(height - 1)],
+        radius=S(CARD_CORNER_RADIUS), fill=(255, 255, 255, 243),
+    )
+
+    dark = (15, 17, 21, 255)
+    muted = (113, 118, 123, 255)
+
+    # --- Header row: avatar + handle + verified + awards -------------------
+    cy = S(pad + avatar_r)
+    ax = S(pad + avatar_r)
+    draw.ellipse(
+        [ax - S(avatar_r), cy - S(avatar_r), ax + S(avatar_r), cy + S(avatar_r)],
+        fill=(255, 69, 0, 255),
+    )
+    avatar_font = _load_font(S(40))
+    initial = _handle_initial(handle)
+    init_bbox = draw.textbbox((0, 0), initial, font=avatar_font)
+    draw.text(
+        (ax - (init_bbox[2] - init_bbox[0]) / 2 - init_bbox[0],
+         cy - (init_bbox[3] - init_bbox[1]) / 2 - init_bbox[1]),
+        initial, font=avatar_font, fill=(255, 255, 255, 255),
+    )
+
+    text_x = S(pad + avatar_r * 2 + 18)
+    handle_bbox = draw.textbbox((0, 0), handle, font=handle_font)
+    draw.text((text_x, cy - S(18)), handle, font=handle_font, fill=dark)
+    handle_w = handle_bbox[2] - handle_bbox[0]
+
+    badge_r = 19
+    _draw_verified_badge(draw, text_x + handle_w + S(badge_r + 10), cy, S(badge_r))
+
+    _draw_awards(draw, text_x + handle_w + S(badge_r * 2 + 34), cy, min(awards, 4))
+
+    # --- Bold post title / hook ---------------------------------------------
+    y = S(pad + header_h + gap_header_title)
+    for line in title_lines:
+        draw.text((S(pad), y), line, font=title_font, fill=dark)
+        y += S(title_line_h)
+
+    # --- Like / comment / share metrics --------------------------------------
+    y = S(pad + header_h + gap_header_title
+          + len(title_lines) * title_line_h + gap_title_metrics + 20)
+    mx = S(pad)
+    _draw_heart(draw, mx + S(11), y + S(10), S(11))
+    likes_w = draw.textlength(_format_count(upvotes), font=metric_font)
+    draw.text((mx + S(30), y), _format_count(upvotes), font=metric_font, fill=muted)
+    mx += S(30) + likes_w + S(30)
+    _draw_comment_bubble(draw, mx, y - S(2), S(26), S(20))
+    comments_w = draw.textlength(_format_count(comments), font=metric_font)
+    draw.text((mx + S(36), y), _format_count(comments), font=metric_font, fill=muted)
+    mx += S(36) + comments_w + S(30)
+    _draw_share_arrow(draw, mx + S(11), y + S(10), S(18))
+    draw.text((mx + S(30), y), _format_count(shares), font=metric_font, fill=muted)
+
+    card = canvas.resize((width, height + 14), Image.LANCZOS)
+    card.save(out_path, format="PNG")
+    return out_path
+
+
 def render_caption_pngs(
     frames: Sequence[CaptionFrame], workdir: Path
 ) -> List[Path]:
     """Pre-render each caption frame as a transparent PNG (Pillow).
 
     Heavy stroke text centered on a full-width canvas; punchlines get the
-    yellow pop. PNGs are later burned in with `overlay` filters, keeping
+    yellow pop. The compositor centers these PNGs in the middle of the
+    vertical frame. PNGs are burned in with `overlay` filters, keeping
     the pipeline free of ffmpeg's optional drawtext filter.
     """
     from PIL import Image, ImageDraw
 
     pngs: List[Path] = []
     for i, frame in enumerate(frames):
-        font = _load_caption_font(
+        font = _load_font(
             PUNCHLINE_FONT_SIZE if frame.is_punchline else CAPTION_FONT_SIZE
         )
         color = f"#{PUNCHLINE_COLOR}" if frame.is_punchline else CAPTION_COLOR
@@ -220,24 +448,24 @@ def _caption_overlay_chain(
     caption_pngs: Sequence[Path],
     frames: Sequence[CaptionFrame],
     first_input_index: int,
+    base_label: str,
 ) -> tuple[List[str], List[str]]:
     """Overlay filter snippets chaining the caption PNGs onto the video.
 
     Returns (filter_snippets, input_args). Each PNG enters as its own input
-    and is overlaid centered on the gameplay half, visible only during its
-    time window (`enable=between(t,...)`).
+    and is overlaid dead-center of the vertical frame (both axes), visible
+    only during its time window (`enable=between(t,...)`).
     """
-    top_h = settings.VIDEO_HEIGHT // 2
     inputs: List[str] = []
     filters: List[str] = []
-    prev = "[base]"
+    prev = base_label
     for i, (png, frame) in enumerate(zip(caption_pngs, frames)):
         idx = first_input_index + i
         inputs += ["-i", str(png)]
         out = f"[cap{i}]" if i < len(caption_pngs) - 1 else "[v]"
         filters.append(
-            f"{prev}[{idx}:v]overlay=x=0:"
-            f"y={top_h + 40}:"
+            f"{prev}[{idx}:v]overlay=x=(main_w-overlay_w)/2:"
+            f"y=(main_h-overlay_h)/2:"
             f"enable='between(t,{frame.start:.3f},{frame.end:.3f})'{out}"
         )
         prev = out
@@ -245,73 +473,107 @@ def _caption_overlay_chain(
 
 
 def compose_video(
-    card_path: Path,
     gameplay_path: Path,
     voiceover_path: Path,
     captions: Sequence[CaptionFrame],
     output_path: Path,
+    card_path: Optional[Path] = None,
     caption_pngs: Optional[Sequence[Path]] = None,
     workdir: Optional[Path] = None,
     sfx_path: Optional[Path] = None,
     sfx_events: Optional[List[float]] = None,
+    card_duration: Optional[float] = None,
 ) -> List[str]:
-    """Assemble the full ffmpeg argv for the split-screen render.
+    """Assemble the full ffmpeg argv for the full-screen vertical render.
 
-    Caption PNGs are rendered on the fly when not supplied (caller can pass
-    pre-rendered ones from `render_caption_pngs`).
+    Layout: gameplay fills the whole 1080x1920 frame; the Reddit post card
+    floats upper-center and fades out after `card_duration` seconds (None
+    keeps it pinned for the whole video); kinetic captions burn in dead
+    center. Caption PNGs are rendered on the fly when not supplied.
     """
     w, h = settings.VIDEO_WIDTH, settings.VIDEO_HEIGHT
-    top_h = h // 2
     fps = settings.VIDEO_FPS
 
-    if caption_pngs is None:
+    if caption_pngs is None and captions:
         if workdir is None:
             workdir = output_path.parent
         caption_pngs = render_caption_pngs(captions, workdir)
+    caption_pngs = caption_pngs or []
 
-    inputs = [
+    has_card = card_path is not None
+    has_captions = bool(captions) and bool(caption_pngs)
+
+    inputs: List[str] = [
         settings.FFMPEG_BIN, "-y",
-        "-loop", "1", "-i", str(card_path),          # 0: reddit card
-        "-stream_loop", "-1", "-i", str(gameplay_path),  # 1: gameplay loop
-        "-i", str(voiceover_path),                   # 2: voiceover audio
+        "-stream_loop", "-1", "-i", str(gameplay_path),  # 0: fullscreen bg
     ]
+    next_index = 1
+    card_index: Optional[int] = None
+    if has_card:
+        inputs += ["-loop", "1", "-i", str(card_path)]  # floating card
+        card_index = next_index
+        next_index += 1
+
+    voiceover_index = next_index
+    inputs += ["-i", str(voiceover_path)]
+    next_index += 1
+
+    sfx_index: Optional[int] = None
     if sfx_path and sfx_events:
-        inputs += ["-i", str(sfx_path)]              # 3: sfx (optional)
+        inputs += ["-i", str(sfx_path)]
+        sfx_index = next_index
+        next_index += 1
 
-    # Video graph: scale both halves, vstack, burn captions on the gameplay.
-    video_chain = (
-        f"[0:v]scale={w}:{top_h}:force_original_aspect_ratio=increase,"
-        f"crop={w}:{top_h}[top];"
-        f"[1:v]scale={w}:{top_h}:force_original_aspect_ratio=increase,"
-        f"crop={w}:{top_h},fps={fps},setsar=1[bottom];"
-        f"[top][bottom]vstack=inputs=2[base]"
-    )
+    first_caption_index = next_index
 
-    sfx_index = 3
-    first_caption_index = 4 if (sfx_path and sfx_events) else 3
-    caption_filters, caption_inputs = _caption_overlay_chain(
-        caption_pngs, captions, first_caption_index
-    )
-    inputs += caption_inputs
+    # --- Video graph ---------------------------------------------------------
+    # Full-screen gameplay background: scale to cover, then center-crop to
+    # the exact 1080x1920 frame — edge to edge, no letterboxing.
+    parts: List[str] = [
+        f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
+        f"crop={w}:{h},fps={fps},setsar=1[bg]"
+    ]
 
-    if not caption_pngs:
-        # No captions: vstack output becomes the final video stream.
-        video_chain = video_chain.replace("[base]", "[v]")
+    if has_card:
+        # Card: fade in at the start, fade out once the hook has landed.
+        card_chain = (
+            f"[{card_index}:v]format=rgba,"
+            f"fade=t=in:st=0:d={CARD_FADE_IN_S}:alpha=1"
+        )
+        if card_duration is not None:
+            fade_start = max(0.0, card_duration - CARD_FADE_OUT_S)
+            card_chain += (
+                f",fade=t=out:st={fade_start:.3f}:d={CARD_FADE_OUT_S}:alpha=1"
+            )
+        parts.append(card_chain + "[card]")
+        card_out = "[cardbg]" if has_captions else "[v]"
+        parts.append(
+            f"[bg][card]overlay=x=(main_w-overlay_w)/2:"
+            f"y=main_h*{CARD_TOP_FRACTION}{card_out}"
+        )
 
-    parts = [video_chain]
-    parts.extend(caption_filters)
+    if has_captions:
+        base_label = "[cardbg]" if has_card else "[bg]"
+        caption_filters, caption_inputs = _caption_overlay_chain(
+            caption_pngs, captions, first_caption_index, base_label
+        )
+        inputs += caption_inputs
+        parts.extend(caption_filters)
+    elif not has_card:
+        # Nothing overlays the background: [bg] is the final video stream.
+        parts[0] = parts[0].replace("[bg]", "[v]")
 
-    # Audio graph: voiceover (+ delayed sfx mixed in when provided).
-    if sfx_path and sfx_events:
+    # --- Audio graph: voiceover (+ delayed sfx mixed in when provided) ------
+    if sfx_index is not None and sfx_events:
         delays = "|".join(f"{int(t * 1000)}:all=1" for t in sfx_events)
         parts.append(
-            f"[2:a]aresample=44100[vo];"
+            f"[{voiceover_index}:a]aresample=44100[vo];"
             f"[{sfx_index}:a]aresample=44100,adelay='{delays}'[sfx];"
             f"[vo][sfx]amix=inputs=2:duration=first:dropout_transition=0,"
             "volume=1.5[a]"
         )
     else:
-        parts.append("[2:a]aresample=44100[a]")
+        parts.append(f"[{voiceover_index}:a]aresample=44100[a]")
 
     filter_complex = ";".join(parts)
 

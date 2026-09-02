@@ -14,7 +14,7 @@ const STEPS = [
 	{
 		icon: AudioLines,
 		title: 'Pick a voice',
-		body: 'Free Azure neural voices via edge-tts, or ElevenLabs for drama.',
+		body: 'Classic TikTok meme voices, free Azure neural voices, or ElevenLabs.',
 		color: 'text-emerald-300'
 	},
 	{
@@ -26,7 +26,7 @@ const STEPS = [
 	{
 		icon: Film,
 		title: 'Forge the short',
-		body: '1080×1920 split-screen, kinetic captions, SFX on the punchline.',
+		body: 'Full-screen 1080×1920 gameplay, floating Reddit card, center captions.',
 		color: 'text-rose-300'
 	}
 ];
@@ -54,8 +54,9 @@ export default function Home() {
 
 				<p className="mt-6 max-w-2xl text-balance text-lg leading-relaxed text-muted-foreground">
 					Memeforge wires your model connector, voiceover engine, and gameplay
-					loops into one visual pipeline — then renders vertical 1080×1920
-					split-screen shorts with kinetic captions and punchline SFX.
+					loops into one visual pipeline — then renders viral-style vertical
+					1080×1920 shorts: full-screen gameplay, a floating Reddit post card,
+					and kinetic captions with punchline SFX.
 				</p>
 
 				<div className="mt-10 flex flex-wrap items-center justify-center gap-4">

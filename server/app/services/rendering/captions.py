@@ -1,10 +1,11 @@
 """Kinetic caption builder.
 
-Reddit-style shorts show 1-2 words per caption frame, centered on screen
-with a heavy stroke. This module chunks a script (plus per-line TTS audio
-durations) into caption frames; the compositor pre-renders each frame as a
-transparent PNG (Pillow) and burns them in with ffmpeg `overlay` filters —
-no `drawtext`/freetype dependency, so it works on any ffmpeg build.
+Reddit-style shorts show 1-2 words per caption frame, centered in the
+middle of the vertical frame with a heavy stroke. This module chunks a
+script (plus per-line TTS audio durations) into caption frames; the
+compositor pre-renders each frame as a transparent PNG (Pillow) and
+burns them in with ffmpeg `overlay` filters — no `drawtext`/freetype
+dependency, so it works on any ffmpeg build.
 """
 
 import re
