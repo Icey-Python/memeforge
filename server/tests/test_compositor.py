@@ -9,15 +9,20 @@ upper-center and captions centered in the middle of the frame.
 
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from app.core import settings
+from app.providers.tts.base import WordTiming
 from app.services.rendering.captions import build_caption_timeline
 from app.services.rendering.compositor import (
     CARD_TOP_FRACTION,
     CARD_WIDTH,
+    VIDEO_TAIL_S,
     build_reddit_post_card,
     compose_video,
+    concat_audio_args,
+    duration_from_probe,
     render_caption_pngs,
 )
 
@@ -195,3 +200,247 @@ def test_build_reddit_post_card_wraps_long_titles(tmp_path: Path):
     )
     with Image.open(short) as s, Image.open(long) as l:
         assert l.height > s.height  # wrapped title grows the card
+
+
+# --- Audio/caption synchronization -------------------------------------------
+
+
+def test_caption_timeline_tracks_probed_durations_exactly():
+    """Line windows are the probed audio segments, back to back.
+
+    Regression guard for the ~2.8s cumulative drift: no synthetic per-line
+    padding may creep into the caption timeline, and frames must tile the
+    full voiceover with no gaps or overlaps.
+    """
+    lines = ["one two three", "four five six seven", "eight"]
+    durations = [1.2, 2.0, 0.8]
+
+    frames = build_caption_timeline(lines, durations)
+
+    # Line starts are the cumulative sum of exact probed durations.
+    line_starts = [0.0, 1.2, 3.2]
+    for start in line_starts:
+        kicked = [f for f in frames if abs(f.start - start) < 0.001]
+        assert kicked, f"no caption frame starts at line boundary {start}"
+    # Frames tile the timeline exactly: gapless, no overlap, no dead space.
+    assert frames[0].start == 0.0
+    assert frames[-1].end == pytest.approx(sum(durations), abs=1e-6)
+    for prev, nxt in zip(frames, frames[1:]):
+        assert nxt.start == pytest.approx(prev.end, abs=1e-6)
+    # No per-line padding: 3 lines must NOT add 3 * 0.35s of phantom tail.
+    assert sum(durations) == pytest.approx(4.0)
+    assert frames[-1].end == pytest.approx(4.0, abs=1e-6)
+
+
+def test_caption_timeline_word_timings_exact_starts():
+    """Word-boundary timings snap chunk starts to spoken-word timestamps."""
+    lines = ["brace yourself gamers"]
+    durations = [2.0]
+    timings = [
+        [
+            WordTiming(text="brace", start=0.10, end=0.40),
+            WordTiming(text="yourself", start=0.45, end=0.95),
+            WordTiming(text="gamers", start=1.00, end=1.60),
+        ]
+    ]
+
+    frames = build_caption_timeline(
+        lines, durations, word_timings=timings, total_duration=2.0
+    )
+
+    assert [f.words for f in frames] == ["BRACE YOURSELF", "GAMERS"]
+    # Exact spoken-word starts (not even proportional splits).
+    assert frames[0].start == pytest.approx(0.10, abs=1e-6)
+    assert frames[1].start == pytest.approx(1.00, abs=1e-6)
+    # Chunk holds until the next starts; last chunk holds to line end.
+    assert frames[0].end == pytest.approx(1.00, abs=1e-6)
+    assert frames[1].end == pytest.approx(2.00, abs=1e-6)
+    # Gapless after the first spoken word: no dead space between chunks.
+    for prev, nxt in zip(frames, frames[1:]):
+        assert nxt.start == pytest.approx(prev.end, abs=1e-6)
+
+
+def test_caption_timeline_word_timings_offset_by_line_start():
+    """Timings are line-relative; line 2's frames offset by line 1's audio."""
+    lines = ["first line here", "second line now"]
+    durations = [1.5, 2.0]
+    timings = [
+        [
+            WordTiming(text="first", start=0.05, end=0.30),
+            WordTiming(text="line", start=0.35, end=0.60),
+            WordTiming(text="here", start=0.65, end=0.95),
+        ],
+        [
+            WordTiming(text="second", start=0.08, end=0.50),
+            WordTiming(text="line", start=0.55, end=0.80),
+            WordTiming(text="now", start=0.85, end=1.20),
+        ],
+    ]
+
+    frames = build_caption_timeline(lines, durations, word_timings=timings)
+
+    line2_frames = [f for f in frames if f.words in ("SECOND LINE", "NOW")]
+    assert line2_frames[0].start == pytest.approx(1.5 + 0.08, abs=1e-6)
+    assert line2_frames[-1].end == pytest.approx(3.5, abs=1e-6)  # line 2 end
+
+
+def test_caption_timeline_word_timings_mismatch_falls_back():
+    """Engine timings that don't match the script degrade to proportional."""
+    lines = ["two words"]
+    durations = [1.0]
+    # 3 timings for 2 script words (e.g. number expansion) -> unusable.
+    bad = [[
+        WordTiming(text="two", start=0.0, end=0.2),
+        WordTiming(text="words", start=0.3, end=0.5),
+        WordTiming(text="extra", start=0.6, end=0.8),
+    ]]
+    frames = build_caption_timeline(lines, durations, word_timings=bad)
+    # Proportional fallback: single chunk tiles the whole line.
+    assert len(frames) == 1
+    assert frames[0].start == 0.0 and frames[0].end == pytest.approx(1.0)
+
+    # Non-monotonic timings are equally rejected.
+    bad_order = [[
+        WordTiming(text="two", start=0.5, end=0.8),
+        WordTiming(text="words", start=0.1, end=0.4),
+    ]]
+    frames = build_caption_timeline(lines, durations, word_timings=bad_order)
+    assert frames[0].start == 0.0 and frames[0].end == pytest.approx(1.0)
+
+
+def test_caption_timeline_validates_word_timings_shape():
+    with pytest.raises(ValueError, match="word_timings"):
+        build_caption_timeline(
+            ["a"], [1.0], word_timings=[None, None]
+        )
+
+
+def test_caption_timeline_stretches_last_frame_to_audio_total():
+    """Final-encode leftovers are absorbed so captions end with the audio."""
+    lines = ["one two three four"]
+    durations = [2.0]
+    frames = build_caption_timeline(
+        lines, durations, total_duration=2.026  # mp3/aac frame rounding
+    )
+    assert frames[-1].end == pytest.approx(2.026, abs=1e-6)
+
+
+def test_compose_video_audio_padded_to_full_cut(tmp_path: Path):
+    """The audio track spans the whole video so the SFX rings through
+    the tail instead of being truncated at the voiceover's end."""
+    # No-SFX path: plain pad to the full cut.
+    _, argv = _compose(tmp_path, audio_duration=6.5)
+    graph = _graph(argv)
+    assert f"apad=whole_dur={6.5 + VIDEO_TAIL_S:.3f}" in graph
+
+    # SFX path: mixed with duration=longest, then padded to the full cut.
+    _, argv = _compose(
+        tmp_path, audio_duration=6.5,
+        sfx_path=Path("boom.mp3"), sfx_events=[5.0],
+    )
+    graph = _graph(argv)
+    assert "amix=inputs=2:duration=longest:dropout_transition=0" in graph
+    assert "volume=1.5,apad=whole_dur=6.800[a]" in graph
+
+
+def test_compose_video_duration_is_audio_plus_tight_tail(tmp_path: Path):
+    """Final cut = exact voiceover duration + 0.3s, nothing looser."""
+    frames, argv = _compose(tmp_path, audio_duration=6.5)
+    assert argv[argv.index("-t") + 1] == f"{6.5 + VIDEO_TAIL_S:.3f}"
+    assert VIDEO_TAIL_S == 0.3
+
+
+def test_compose_video_duration_falls_back_to_captions(tmp_path: Path):
+    """Without a probed audio length, the caption end drives the cut."""
+    frames, argv = _compose(tmp_path, audio_duration=None)
+    expected = frames[-1].end + VIDEO_TAIL_S
+    assert argv[argv.index("-t") + 1] == f"{expected:.3f}"
+
+
+def test_caption_timeline_tiles_exactly_with_ugly_floats():
+    """Rounded boundaries never open sub-millisecond seams between frames."""
+    lines = ["alpha beta gamma delta epsilon", "zeta eta theta iota kappa"]
+    durs = [1.733, 2.419]  # probed values are never round
+    frames = build_caption_timeline(
+        lines, durs, total_duration=sum(durs)
+    )
+
+    assert frames[0].start == 0.0
+    # Line boundary lands exactly at the cumulative probed duration.
+    assert any(f.start == 1.733 for f in frames)
+    assert frames[-1].end == pytest.approx(4.152, abs=1e-9)
+    for prev, nxt in zip(frames, frames[1:]):
+        assert nxt.start == prev.end  # byte-exact, not approx
+
+
+# --- Voiceover concatenation (sample-exact, gapless) --------------------------
+
+
+def test_concat_audio_args_gapless_concat_filter():
+    argv = concat_audio_args(
+        [Path("a.mp3"), Path("b.mp3"), Path("c.mp3")], Path("out.wav")
+    )
+    graph = argv[argv.index("-filter_complex") + 1]
+
+    # Decoded + resampled concat filter: boundaries land at exactly the
+    # sum of probed per-part durations.
+    assert "concat=n=3:v=0:a=1[a]" in graph
+    assert argv[argv.index("-map") + 1] == "[a]"
+    # Sample-exact PCM output (no mp3 frame rounding on the voiceover).
+    assert "pcm_s16le" in argv
+    assert str(Path("out.wav")) in argv
+    # Gapless by default: no injected silence anywhere.
+    assert "anullsrc" not in " ".join(argv)
+    assert "lavfi" not in " ".join(argv)
+
+
+def test_concat_audio_args_optional_pacing_gap():
+    argv = concat_audio_args(
+        [Path("a.mp3"), Path("b.mp3")], Path("out.wav"), gap_ms=150
+    )
+    graph = argv[argv.index("-filter_complex") + 1]
+
+    # Exactly one silence source between the two parts, timed to the ms.
+    assert argv.count("-i") == 3
+    lavfi = argv.index("-f")
+    assert argv[lavfi + 1] == "lavfi"
+    assert argv[lavfi + 2] == "-t" and argv[lavfi + 3] == "0.150"
+    assert "anullsrc=r=44100:cl=mono" in argv
+    assert "concat=n=3:v=0:a=1[a]" in graph
+
+
+def test_concat_audio_args_single_part_passthrough():
+    argv = concat_audio_args([Path("a.mp3")], Path("out.wav"))
+    graph = argv[argv.index("-filter_complex") + 1]
+
+    # No concat filter for a single part — just normalize + re-encode.
+    assert "concat=" not in graph
+    assert graph.startswith("[0:a]aresample=44100,")
+    assert graph.endswith("[a]")
+
+
+def test_concat_audio_args_requires_parts():
+    with pytest.raises(ValueError, match="no audio parts"):
+        concat_audio_args([], Path("out.wav"))
+
+
+# --- Exact duration probing ----------------------------------------------------
+
+
+def test_duration_from_probe_prefers_stream_duration():
+    # The audio stream's duration is decoded-frame/sample accurate.
+    payload = (
+        '{"streams": [{"duration": "1.000"}], '
+        '"format": {"duration": "2.000"}}'
+    )
+    assert duration_from_probe(payload) == pytest.approx(1.0)
+
+
+def test_duration_from_probe_falls_back_to_container():
+    payload = '{"streams": [{}], "format": {"duration": "1.234"}}'
+    assert duration_from_probe(payload) == pytest.approx(1.234)
+
+
+def test_duration_from_probe_rejects_garbage():
+    assert duration_from_probe("not json") is None
+    assert duration_from_probe('{"streams": [], "format": {}}') is None

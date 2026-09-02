@@ -26,10 +26,10 @@ from app.schemas.render_schema import JobStatus, RenderRequest
 from app.services import jobs as jobs_service
 from app.services.rendering import compositor
 from app.services.rendering.captions import build_caption_timeline
+from app.providers.tts.base import WordTiming
 
 # Fallback speech rate when TTS duration probing is unavailable.
 _SECONDS_PER_WORD = 0.42
-_LINE_TAIL_SECONDS = 0.35
 
 # Per-line TTS hardening: network TTS can stall on a bad chunk; a hung
 # stream must never hang the whole render job.
@@ -106,6 +106,10 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
         gameplay = Path(clip.source)
 
         # --- 2. TTS per line --------------------------------------------------
+        # Sync contract: each line's caption window is built from the EXACT
+        # probed duration of its audio segment (no synthetic padding), and
+        # the segments are concatenated with zero dead space, so captions
+        # and voiceover share timestamps end-to-end.
         store.update(job_id, progress=0.15, message="Synthesizing voiceover")
         from app.providers.tts import registry as tts_registry
 
@@ -114,6 +118,7 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
         )
 
         line_durations: List[float] = []
+        line_word_timings: List[Optional[List[WordTiming]]] = []
         audio_parts: List[Path] = []
         for i, line in enumerate(request.script):
             store.update(
@@ -124,22 +129,35 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
             part = workdir / f"line-{i:03d}.{audio.format}"
             part.write_bytes(audio.audio_bytes)
             audio_parts.append(part)
+            line_word_timings.append(audio.word_timings)
             if compositor.ffprobe_available():
-                line_durations.append(
-                    await compositor.probe_duration(part) + _LINE_TAIL_SECONDS
-                )
+                line_durations.append(await compositor.probe_duration(part))
+            elif audio.word_timings:
+                # Best estimate without ffprobe: the last spoken word's end.
+                line_durations.append(max(0.8, audio.word_timings[-1].end))
             else:  # word-count estimate fallback
-                line_durations.append(
-                    max(0.8, len(line.split()) * _SECONDS_PER_WORD + _LINE_TAIL_SECONDS)
-                )
+                line_durations.append(max(0.8, len(line.split()) * _SECONDS_PER_WORD))
 
         store.update(job_id, progress=0.45, message="Stitching voiceover")
-        voiceover = await compositor.concat_audio(audio_parts, workdir / "voiceover.mp3")
+        voiceover = await compositor.concat_audio(
+            audio_parts, workdir / "voiceover.wav"
+        )
+        # The concatenated voiceover is the single source of truth for the
+        # video length: final cut = exact audio duration + punchline tail.
+        total_audio_duration: Optional[float] = None
+        if compositor.ffprobe_available():
+            total_audio_duration = await compositor.probe_duration(voiceover)
+        elif line_durations:
+            total_audio_duration = sum(line_durations)
 
         # --- 3. Captions + card -------------------------------------------------
         punchlines = {len(request.script) - 1}  # last line is the punchline
         captions = build_caption_timeline(
-            request.script, line_durations, punchline_indexes=punchlines
+            request.script,
+            line_durations,
+            punchline_indexes=punchlines,
+            total_duration=total_audio_duration,
+            word_timings=line_word_timings,
         )
 
         title = request.title or request.topic or "r/gaming"
@@ -180,6 +198,7 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
             sfx_path=sfx,
             sfx_events=sfx_events,
             card_duration=card_duration,
+            audio_duration=total_audio_duration,
         )
         await compositor.run_ffmpeg(cmd)
 

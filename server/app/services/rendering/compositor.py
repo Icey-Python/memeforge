@@ -65,6 +65,11 @@ CARD_MAX_DISPLAY_S = 5.0
 FFMPEG_TIMEOUT_S = 600.0
 FFPROBE_TIMEOUT_S = 30.0
 
+# Tight tail after the voiceover ends: the last caption frame lingers on
+# screen for punchline resonance while the audio stream has already
+# finished. The final video length is exactly audio duration + this tail.
+VIDEO_TAIL_S = 0.3
+
 # Massive display fonts, tried in order: Impact/Anton/Montserrat Black are
 # the meme standard; Arial Bold / DejaVu Bold are the portable fallbacks.
 _FONT_CANDIDATES = [
@@ -94,12 +99,22 @@ def ffprobe_available() -> bool:
 
 
 async def probe_duration(media_path: Path) -> float:
-    """Duration of an audio/video file in seconds, via ffprobe."""
+    """Exact duration of an audio/video file in seconds, via ffprobe.
+
+    Prefers the audio stream's own duration — for mp3 it is derived from
+    the real decoded frame count (frame-exact, matching what ffmpeg
+    decodes when concatenating), and for PCM/WAV it is sample-exact. The
+    container's format duration is the fallback (video files, damaged
+    streams). The returned value is what the voiceover concatenation and
+    the caption timeline are both built on, so audio and captions share
+    timestamps end-to-end.
+    """
     cmd = [
         "ffprobe",
         "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
+        "-select_streams", "a:0",
+        "-show_entries", "stream=duration:format=duration",
+        "-of", "json",
         str(media_path),
     ]
     proc = await asyncio.create_subprocess_exec(
@@ -112,7 +127,39 @@ async def probe_duration(media_path: Path) -> float:
     )
     if proc.returncode != 0:
         raise RuntimeError(f"ffprobe failed for {media_path}")
-    return float(stdout.decode().strip())
+    duration = duration_from_probe(stdout.decode(errors="replace"))
+    if duration is None:
+        raise RuntimeError(f"ffprobe found no duration for {media_path}")
+    return duration
+
+
+def duration_from_probe(probe_output: str) -> Optional[float]:
+    """Pick the most exact duration from an ffprobe JSON payload.
+
+    The audio stream's duration wins (decoded-frame / sample accurate);
+    the container format duration is the fallback. Returns None when
+    neither is usable, so callers can raise a precise error.
+    """
+    import json
+
+    try:
+        payload = json.loads(probe_output)
+    except ValueError:
+        return None
+    streams = payload.get("streams") or [{}]
+    stream = streams[0] or {}
+    try:
+        if stream.get("duration") is not None:
+            return float(stream["duration"])
+    except (TypeError, ValueError):
+        pass
+    try:
+        fmt_duration = payload.get("format", {}).get("duration")
+        if fmt_duration is not None:
+            return float(fmt_duration)
+    except (TypeError, ValueError):
+        pass
+    return None
 
 
 def _load_font(size: int):
@@ -483,6 +530,7 @@ def compose_video(
     sfx_path: Optional[Path] = None,
     sfx_events: Optional[List[float]] = None,
     card_duration: Optional[float] = None,
+    audio_duration: Optional[float] = None,
 ) -> List[str]:
     """Assemble the full ffmpeg argv for the full-screen vertical render.
 
@@ -490,6 +538,11 @@ def compose_video(
     floats upper-center and fades out after `card_duration` seconds (None
     keeps it pinned for the whole video); kinetic captions burn in dead
     center. Caption PNGs are rendered on the fly when not supplied.
+
+    Duration: when `audio_duration` (the probed voiceover length) is
+    given, the output runs exactly that plus VIDEO_TAIL_S so the audio
+    and caption tracks share start/end timestamps and the punchline gets
+    a tight resonance tail.
     """
     w, h = settings.VIDEO_WIDTH, settings.VIDEO_HEIGHT
     fps = settings.VIDEO_FPS
@@ -563,24 +616,33 @@ def compose_video(
         # Nothing overlays the background: [bg] is the final video stream.
         parts[0] = parts[0].replace("[bg]", "[v]")
 
+    # Duration: exact audio stream length + the tight punchline tail. The
+    # caption overlay windows are built on the same audio timeline, so
+    # video, audio and captions start and end together.
+    if audio_duration is not None:
+        duration = audio_duration + VIDEO_TAIL_S
+    else:
+        duration = max(1.0, captions[-1].end if captions else 3.0) + VIDEO_TAIL_S
+
     # --- Audio graph: voiceover (+ delayed sfx mixed in when provided) ------
+    # The mixed track is padded to the full cut (`apad=whole_dur`) so the
+    # punchline SFX rings through the tail instead of being truncated at
+    # the voiceover's end.
     if sfx_index is not None and sfx_events:
         delays = "|".join(f"{int(t * 1000)}:all=1" for t in sfx_events)
         parts.append(
             f"[{voiceover_index}:a]aresample=44100[vo];"
             f"[{sfx_index}:a]aresample=44100,adelay='{delays}'[sfx];"
-            f"[vo][sfx]amix=inputs=2:duration=first:dropout_transition=0,"
-            "volume=1.5[a]"
+            f"[vo][sfx]amix=inputs=2:duration=longest:dropout_transition=0,"
+            f"volume=1.5,apad=whole_dur={duration:.3f}[a]"
         )
     else:
-        parts.append(f"[{voiceover_index}:a]aresample=44100[a]")
+        parts.append(
+            f"[{voiceover_index}:a]aresample=44100,"
+            f"apad=whole_dur={duration:.3f}[a]"
+        )
 
     filter_complex = ";".join(parts)
-
-    # Duration: caption timeline end + a short tail so the punchline lands.
-    duration = (
-        max(1.0, captions[-1].end if captions else 3.0) + 0.6
-    )
 
     return inputs + [
         "-filter_complex", filter_complex,
@@ -610,36 +672,70 @@ async def run_ffmpeg(args: Sequence[str]) -> None:
         raise RuntimeError(f"ffmpeg exited {proc.returncode}:\n{tail}")
 
 
-async def concat_audio(parts: List[Path], output: Path, gap_ms: int = 120) -> Path:
-    """Concatenate per-line TTS audio with small breathing gaps."""
+def concat_audio_args(
+    parts: List[Path], output: Path, gap_ms: int = 0
+) -> List[str]:
+    """Build the ffmpeg argv that concatenates per-line TTS audio.
+
+    Every part is decoded, resampled to a common 44.1kHz mono format and
+    stitched with the `concat` *filter* (not the demuxer), so line
+    boundaries land at exactly the sum of the probed per-part decoded
+    durations — no mp3 frame rounding, no dead space. The output is WAV:
+    sample-exact, so its probed duration equals the true audio length.
+
+    `gap_ms > 0` injects exactly that much silence after every line but
+    the last (pacing pauses); the caller must then include the gap in
+    the caption timeline. The render pipeline uses 0: no dead space.
+    """
     if not parts:
         raise ValueError("no audio parts to concat")
-    if len(parts) == 1 and gap_ms == 0:
-        shutil.copyfile(parts[0], output)
-        return output
 
-    # Build a silent-gap file once, then use concat demuxer.
-    gap = output.parent / "gap.mp3"
-    gap_ms_total = gap_ms
-    cmd = [
-        settings.FFMPEG_BIN, "-y",
-        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
-        "-t", f"{gap_ms_total / 1000:.3f}",
-        "-c:a", "libmp3lame", "-q:a", "4", str(gap),
-    ]
-    await run_ffmpeg(cmd)
-
-    concat_list = output.parent / "concat.txt"
-    lines = []
+    inputs: List[str] = [settings.FFMPEG_BIN, "-y"]
+    filters: List[str] = []
+    concat_labels: List[str] = []
+    idx = 0
     for i, part in enumerate(parts):
-        lines.append(f"file '{part.resolve()}'")
-        if i < len(parts) - 1:
-            lines.append(f"file '{gap.resolve()}'")
-    concat_list.write_text("\n".join(lines), encoding="utf-8")
+        inputs += ["-i", str(part)]
+        filters.append(
+            f"[{idx}:a]aresample=44100,"
+            f"aformat=sample_fmts=s16:channel_layouts=mono[a{idx}]"
+        )
+        concat_labels.append(f"[a{idx}]")
+        idx += 1
+        if gap_ms > 0 and i < len(parts) - 1:
+            inputs += [
+                "-f", "lavfi", "-t", f"{gap_ms / 1000:.3f}",
+                "-i", "anullsrc=r=44100:cl=mono",
+            ]
+            filters.append(
+                f"[{idx}:a]aformat=sample_fmts=s16:channel_layouts=mono[a{idx}]"
+            )
+            concat_labels.append(f"[a{idx}]")
+            idx += 1
 
-    await run_ffmpeg([
-        settings.FFMPEG_BIN, "-y",
-        "-f", "concat", "-safe", "0", "-i", str(concat_list),
-        "-c:a", "libmp3lame", "-q:a", "4", str(output),
-    ])
+    if len(concat_labels) == 1:
+        # Single part: normalize it directly, no concat filter needed.
+        filter_complex = filters[0].replace("[a0]", "[a]", 1)
+    else:
+        filter_complex = ";".join(filters) + ";" + "".join(concat_labels) + (
+            f"concat=n={len(concat_labels)}:v=0:a=1[a]"
+        )
+
+    return inputs + [
+        "-filter_complex", filter_complex,
+        "-map", "[a]",
+        "-c:a", "pcm_s16le",
+        str(output),
+    ]
+
+
+async def concat_audio(
+    parts: List[Path], output: Path, gap_ms: int = 0
+) -> Path:
+    """Concatenate per-line TTS audio into one sample-exact voiceover.
+
+    See `concat_audio_args` for the exactness contract. Default gap is
+    0 (no dead space between lines).
+    """
+    await run_ffmpeg(concat_audio_args(parts, output, gap_ms=gap_ms))
     return output
