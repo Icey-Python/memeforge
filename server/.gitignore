@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Env / secrets
+.env
+
+# Local artifacts
+sqlite.db
+outputs/
+*.log
+.agents/
+skills-lock.json
+
+# Media assets (drop real loops/SFX locally; keep dirs via .gitkeep)
+assets/gameplay/*.mp4
+assets/sfx/*
+!assets/sfx/.gitkeep
