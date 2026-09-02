@@ -2,8 +2,10 @@
 
 // Voiceover Node: TTS provider + voice picker + instant previews.
 //
-// TikTok Meme Voices get their own category with per-voice preview
-// buttons; edge/azure voices are grouped into "meme staples" vs the rest.
+// The free meme-voice engines — Meme Classic (Brian & the classic Polly
+// cast) and TikTok Meme Voices — get their own category list with
+// per-voice preview buttons; edge/azure/google voices are grouped into
+// "meme staples" vs the rest.
 
 import { useQuery } from '@tanstack/react-query';
 import type { NodeProps } from '@xyflow/react';
@@ -11,12 +13,30 @@ import { AudioLines, Check, Loader2, Play } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { EDGE_VOICES, TIKTOK_VOICES, TTS_PROVIDERS } from '@/lib/catalog';
+import {
+	EDGE_VOICES,
+	GOOGLE_VOICES,
+	MEME_CLASSIC_VOICES,
+	TIKTOK_VOICES,
+	TTS_PROVIDERS
+} from '@/lib/catalog';
 import { MemeforgeAPI, mediaUrl } from '@/lib/memeforge';
 import { cn } from '@/lib/utils';
 import { usePipelineStore } from '@/store/pipeline';
 import type { TTSProviderId, VoiceOption } from '@/types/studio';
 import { NodeBadge, NodeShell, StudioSelect } from '../node-shell';
+
+// Offline fallback catalogs per provider (used before/without the API):
+// edge + azure share the neural shortlist, tiktok / meme_classic have the
+// meme catalogs, google maps tl codes; elevenlabs lists remotely (empty
+// until an API key is configured server-side).
+const OFFLINE_VOICE_FALLBACKS: Partial<Record<TTSProviderId, VoiceOption[]>> = {
+	edge: EDGE_VOICES,
+	azure: EDGE_VOICES,
+	tiktok: TIKTOK_VOICES,
+	meme_classic: MEME_CLASSIC_VOICES,
+	google: GOOGLE_VOICES
+};
 
 export function VoiceoverNode(_props: NodeProps) {
 	const ttsProvider = usePipelineStore((s) => s.ttsProvider);
@@ -36,17 +56,15 @@ export function VoiceoverNode(_props: NodeProps) {
 	});
 
 	const isTikTok = ttsProvider === 'tiktok';
+	const isMemeClassic = ttsProvider === 'meme_classic';
+	// Free meme-voice engines get the featured category list with direct
+	// per-voice previews; Brian leads the Meme Classic cast.
+	const isFeaturedList = isTikTok || isMemeClassic;
 
-	// Offline fallbacks per provider: edge + azure share the neural
-	// shortlist, tiktok has the meme catalog; elevenlabs lists remotely
-	// (empty until an API key is configured server-side).
-	const fallbackVoices: VoiceOption[] = isTikTok
-		? TIKTOK_VOICES
-		: ttsProvider === 'elevenlabs'
-			? []
-			: EDGE_VOICES;
 	const voiceOptions: VoiceOption[] =
-		voices && voices.length > 0 ? voices : fallbackVoices;
+		voices && voices.length > 0
+			? voices
+			: (OFFLINE_VOICE_FALLBACKS[ttsProvider] ?? []);
 
 	const preview = async (voice: string) => {
 		setPreviewingVoice(voice);
@@ -96,9 +114,20 @@ export function VoiceoverNode(_props: NodeProps) {
 
 			<div className="space-y-1.5">
 				<Label htmlFor="tts-voice">Voice</Label>
-				{isTikTok ? (
-					// TikTok Meme Voices: category list with direct previews.
-					<div className="space-y-1" data-testid="tiktok-voice-list">
+				{isFeaturedList ? (
+					// Featured free meme voices: category list with direct
+					// previews (Brian leads the Meme Classic cast).
+					<div
+						className="space-y-1"
+						data-testid={
+							isMemeClassic ? 'meme-classic-voice-list' : 'tiktok-voice-list'
+						}
+					>
+						{isMemeClassic && (
+							<p className="text-[10px] text-muted-foreground">
+								The iconic Twitch/Reddit TTS voices — free, keyless, no limits.
+							</p>
+						)}
 						{voiceOptions.map((v) => {
 							const selected = v.id === ttsVoice;
 							const previewing = previewingVoice === v.id;
@@ -167,7 +196,7 @@ export function VoiceoverNode(_props: NodeProps) {
 							...(otherVoices.length > 0
 								? [
 										{
-											label: 'More neural voices',
+											label: 'More voices',
 											options: otherVoices.map((v) => ({
 												value: v.id,
 												label: `${v.label} (${v.language}, ${v.gender})`

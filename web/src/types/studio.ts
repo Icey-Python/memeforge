@@ -1,7 +1,13 @@
 /** Shared types for the memeforge studio pipeline. */
 
 export type LLMProviderId = 'openai' | 'ollama' | 'mock';
-export type TTSProviderId = 'edge' | 'tiktok' | 'azure' | 'elevenlabs';
+export type TTSProviderId =
+	| 'edge'
+	| 'meme_classic'
+	| 'tiktok'
+	| 'google'
+	| 'azure'
+	| 'elevenlabs';
 export type RenderJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
 export interface ModelConfig {

@@ -46,9 +46,21 @@ export const TTS_PROVIDERS: {
 		free: true
 	},
 	{
+		id: 'meme_classic',
+		label: 'Meme Classic (Brian)',
+		hint: 'Brian, Justin, Matthew — the iconic meme voices',
+		free: true
+	},
+	{
 		id: 'tiktok',
-		label: 'TikTok Meme Voices',
-		hint: 'Jessie, Ghostface, Trickster…',
+		label: 'TikTok Meme Voices (legacy)',
+		hint: 'Unofficial — may fail, falls back to Brian',
+		free: true
+	},
+	{
+		id: 'google',
+		label: 'Google Translate TTS',
+		hint: 'Reliability fallback engine',
 		free: true
 	},
 	{
@@ -174,6 +186,99 @@ export const TIKTOK_VOICES: VoiceOption[] = [
 		language: 'en-US',
 		gender: 'male',
 		tags: ['meme']
+	}
+];
+
+/** Classic meme voices via ttsmp3.com / AWS Polly (free, keyless —
+ * mirrors the backend meme_classic catalog). Brian is THE meme voice. */
+export const MEME_CLASSIC_VOICES: VoiceOption[] = [
+	{
+		id: 'Brian',
+		label: 'Brian — iconic meme voice (British)',
+		language: 'en-GB',
+		gender: 'male',
+		tags: ['meme', 'iconic']
+	},
+	{
+		id: 'Justin',
+		label: 'Justin — kid/teen story voice',
+		language: 'en-US',
+		gender: 'male',
+		tags: ['meme', 'kid']
+	},
+	{
+		id: 'Matthew',
+		label: 'Matthew — deep serious narrator',
+		language: 'en-US',
+		gender: 'male',
+		tags: ['meme', 'narration']
+	},
+	{
+		id: 'Kendra',
+		label: 'Kendra',
+		language: 'en-US',
+		gender: 'female',
+		tags: ['meme']
+	},
+	{
+		id: 'Salli',
+		label: 'Salli',
+		language: 'en-US',
+		gender: 'female',
+		tags: ['meme']
+	},
+	{
+		id: 'Joey',
+		label: 'Joey',
+		language: 'en-US',
+		gender: 'male',
+		tags: ['meme']
+	},
+	{
+		id: 'Ivy',
+		label: 'Ivy — kid voice',
+		language: 'en-US',
+		gender: 'female',
+		tags: ['meme', 'kid']
+	},
+	{
+		id: 'Joanna',
+		label: 'Joanna',
+		language: 'en-US',
+		gender: 'female',
+		tags: ['meme', 'narration']
+	}
+];
+
+/** Google Translate TTS voices (free, keyless — tl language codes). */
+export const GOOGLE_VOICES: VoiceOption[] = [
+	{
+		id: 'en',
+		label: 'Google US English — reliability fallback',
+		language: 'en-US',
+		gender: 'female',
+		tags: ['fallback']
+	},
+	{
+		id: 'en-GB',
+		label: 'Google UK English',
+		language: 'en-GB',
+		gender: 'female',
+		tags: ['fallback']
+	},
+	{
+		id: 'en-AU',
+		label: 'Google Australian English',
+		language: 'en-AU',
+		gender: 'female',
+		tags: ['fallback']
+	},
+	{
+		id: 'en-IN',
+		label: 'Google Indian English',
+		language: 'en-IN',
+		gender: 'female',
+		tags: ['fallback']
 	}
 ];
 

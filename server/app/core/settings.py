@@ -46,15 +46,29 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 
-# Default TTS provider: "edge" (free, via edge-tts), "tiktok" (free meme
-# voices), "azure", "elevenlabs".
+# Default TTS provider: "edge" (free, via edge-tts), "meme_classic"
+# (free — Brian & the classic meme voices), "tiktok" (free, legacy with
+# auto-fallback), "google" (free reliability fallback), "azure",
+# "elevenlabs".
 DEFAULT_TTS_PROVIDER = os.getenv("MEMEFORGE_TTS_PROVIDER", "edge")
 DEFAULT_EDGE_VOICE = os.getenv("MEMEFORGE_EDGE_VOICE", "en-US-ChristopherNeural")
+
+# Meme Classic voices (free, keyless ttsmp3 API; see providers/tts/meme_classic.py)
+DEFAULT_MEME_CLASSIC_VOICE = os.getenv("MEMEFORGE_MEME_CLASSIC_VOICE", "Brian")
+
+# Google Translate TTS (free, keyless; see providers/tts/google.py)
+DEFAULT_GOOGLE_TTS_VOICE = os.getenv("MEMEFORGE_GOOGLE_TTS_VOICE", "en")
 
 # TikTok meme voices (free, keyless WXA endpoint; see providers/tts/tiktok.py)
 DEFAULT_TIKTOK_VOICE = os.getenv("MEMEFORGE_TIKTOK_VOICE", "en_us_002")
 # Optional: comma-separated override of the endpoint mirrors to try.
 TIKTOK_TTS_URLS = os.getenv("MEMEFORGE_TIKTOK_TTS_URLS", "")
+# Optional: TikTok `sessionid` cookie (from a logged-in tiktok.com browser
+# session) that restores WXA access on mirrors rejecting anonymous calls.
+# Read from TIKTOK_SESSION_ID or MEMEFORGE_TIKTOK_SESSION_ID.
+TIKTOK_SESSION_ID = os.getenv("MEMEFORGE_TIKTOK_SESSION_ID") or os.getenv(
+    "TIKTOK_SESSION_ID", ""
+)
 
 # Azure Speech (paid tier; edge-tts uses the same neural voices for free)
 AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY", "")

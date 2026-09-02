@@ -243,6 +243,34 @@ def test_voices_tiktok_meme_catalog():
     assert all("meme" in v["tags"] for v in voices)
 
 
+def test_voices_meme_classic_catalog():
+    resp = client.get("/api/v1/voices", params={"provider": "meme_classic"})
+    assert resp.status_code == 200
+    voices = resp.json()
+    ids = {v["id"] for v in voices}
+    # The iconic free meme cast (ttsmp3 / Polly voices).
+    assert {
+        "Brian",  # THE meme voice
+        "Justin",  # kid/teen
+        "Matthew",  # deep narrator
+        "Kendra",
+        "Salli",
+        "Joey",
+        "Ivy",
+        "Joanna",
+    } <= ids
+    assert voices[0]["id"] == "Brian"
+    assert all("meme" in v["tags"] for v in voices)
+
+
+def test_voices_google_catalog():
+    resp = client.get("/api/v1/voices", params={"provider": "google"})
+    assert resp.status_code == 200
+    voices = resp.json()
+    ids = {v["id"] for v in voices}
+    assert {"en", "en-GB", "en-AU"} <= ids  # tl language codes
+
+
 def test_voices_unknown_provider_400():
     resp = client.get("/api/v1/voices", params={"provider": "nope"})
     assert resp.status_code == 422  # pydantic enum validation

@@ -18,7 +18,7 @@ floating Reddit post card, kinetic captions, free meme voiceover.
 │        gameplay loop          │  ← FULL-SCREEN 1080×1920 background
 │        (edge to edge)         │    (minecraft parkour, GTA stunts…)
 └───────────────────────────────┘
-   + TikTok meme voices / edge-tts voiceover, punchline SFX 💥
+   + Meme Classic (Brian) / edge-tts voiceover, punchline SFX 💥
 ```
 
 ## Monorepo layout
@@ -26,7 +26,7 @@ floating Reddit post card, kinetic captions, free meme voiceover.
 | Path | What |
 | --- | --- |
 | `web/` | Next.js 16 App Router studio — React Flow canvas with modular nodes (Model Connector → Topic → Script → Voiceover → Preview, plus Gameplay), dark sleek UI |
-| `server/` | FastAPI backend — LLM script generation (OpenAI-compatible / Ollama / mock), TTS (edge-tts free default, TikTok meme voices, Azure, ElevenLabs), async ffmpeg render jobs |
+| `server/` | FastAPI backend — LLM script generation (OpenAI-compatible / Ollama / mock), TTS (edge-tts free default, Meme Classic with Brian & the iconic meme voices, TikTok with auto-fallback, Google Translate, Azure, ElevenLabs), async ffmpeg render jobs |
 
 ## Quickstart
 
@@ -48,8 +48,11 @@ Or run both at once: `./scripts/dev.sh`.
 
 Zero-config demo: the default **Mock** LLM provider works offline, and
 **edge-tts** needs no API key — the whole topic → script → voiceover →
-render pipeline runs without any credentials. The **TikTok meme voices**
-provider (Jessie, Ghostface, Trickster…) is free and keyless too.
+render pipeline runs without any credentials. The **Meme Classic**
+provider (Brian, Justin, Matthew — the iconic Twitch/Reddit meme
+voices) and **Google Translate TTS** are free and keyless too; the
+legacy **TikTok meme voices** provider falls back to edge-tts / Brian
+automatically when its unofficial endpoints reject anonymous calls.
 
 ### Gameplay clips
 
@@ -65,8 +68,9 @@ public-domain clips.
    Ollama / OpenAI-compatible endpoints; mock works offline)
 2. **Topic / Prompt** — topic, tone, one-click idea chips → *Generate script*
 3. **Script** — editable punchline-structured lines, word counts
-4. **Voiceover / TTS** — provider + voice, free by default (TikTok meme
-   voices come with direct per-voice previews)
+4. **Voiceover / TTS** — provider + voice, free by default (Meme Classic
+   Brian & friends and TikTok meme voices come with direct per-voice
+   previews)
 5. **Gameplay / Background** — pick a gameplay loop with asset status
 6. **Preview & Export** — readiness checklist → render → inline player
 
@@ -78,7 +82,7 @@ public-domain clips.
 | `GET /api/v1/models` | available LLM providers |
 | `POST /api/v1/models/discover` | live model list for a provider (Ollama `/api/tags`, OpenAI-compatible `/v1/models`) |
 | `POST /api/v1/generate-script` | topic → meme script (mock/openai-compatible/ollama) |
-| `GET /api/v1/voices?provider=edge` | TTS voice catalog (`edge\|tiktok\|azure\|elevenlabs`) |
+| `GET /api/v1/voices?provider=edge` | TTS voice catalog (`edge\|meme_classic\|tiktok\|google\|azure\|elevenlabs`) |
 | `POST /api/v1/tts` | synthesize one line → audio url |
 | `GET /api/v1/render/gameplays` | gameplay clip catalog + availability |
 | `POST /api/v1/render` | queue a render job (async) |

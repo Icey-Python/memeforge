@@ -5,6 +5,30 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 
+def chunk_text(text: str, limit: int = 280) -> List[str]:
+    """Split text into endpoint-sized chunks (on word boundaries).
+
+    Shared by every provider whose HTTP endpoint hard-caps request text
+    length (TikTok WXA ~280 chars, Google translate_tts ~200 chars...).
+    Lossless: `" ".join(chunk_text(t)) == " ".join(t.split())`.
+    """
+    text = text.strip()
+    if len(text) <= limit:
+        return [text] if text else []
+    chunks: List[str] = []
+    cur = ""
+    for word in text.split():
+        candidate = f"{cur} {word}".strip()
+        if len(candidate) > limit and cur:
+            chunks.append(cur)
+            cur = word
+        else:
+            cur = candidate
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
 class SynthesizedAudio(BaseModel):
     """Result of a TTS synthesis call."""
 

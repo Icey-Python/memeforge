@@ -28,7 +28,7 @@ uvicorn app.main:app --reload --port 8000
 | GET    | `/api/v1/models`           | LLM connector catalog                          |
 | POST   | `/api/v1/models/discover`  | Live model discovery (Ollama `/api/tags`, OpenAI-compatible `/v1/models`) |
 | POST   | `/api/v1/generate-script`  | Generate a meme script for a topic             |
-| GET    | `/api/v1/voices`           | Voice catalog (`?provider=edge\|tiktok\|azure\|elevenlabs`) |
+| GET    | `/api/v1/voices`           | Voice catalog (`?provider=edge\|meme_classic\|tiktok\|google\|azure\|elevenlabs`) |
 | POST   | `/api/v1/tts`              | Synthesize speech, returns audio URL           |
 | GET    | `/api/v1/render/gameplays` | Gameplay loop catalog                          |
 | POST   | `/api/v1/render`           | Start an async render job                      |
@@ -44,8 +44,10 @@ app/
 │   └── endpoints/   # health, script, tts, render
 ├── providers/
 │   ├── llm/         # model connectors: OpenAI-compatible, Ollama, mock
-│   └── tts/         # voice connectors: edge-tts (free), TikTok meme voices
-│                    # (free), Azure, ElevenLabs
+│   └── tts/         # voice connectors: edge-tts (free), Meme Classic
+│                    # (Brian & co., free), TikTok meme voices (free,
+│                    # auto-fallback), Google Translate TTS (free),
+│                    # Azure, ElevenLabs
 ├── services/
 │   ├── jobs.py      # in-memory async render job registry
 │   └── rendering/
@@ -76,12 +78,14 @@ app/
 
 ### TTS providers
 
-| provider      | cost  | notes |
-| ------------- | ----- | ----- |
-| `edge`        | free  | Microsoft neural voices via edge-tts, no API key (default) |
-| `tiktok`      | free  | classic TikTok meme voices (Jessie, Ghostface, Trickster…) via the unofficial WXA endpoint — keyless, but the mirrors can go dark (404); set `MEMEFORGE_TIKTOK_TTS_URLS` to a self-hosted proxy if needed |
-| `azure`       | paid  | same neural voices with an SLA — set `AZURE_*` env |
-| `elevenlabs`  | paid  | premium expressive voices — set `ELEVENLABS_API_KEY` |
+| provider       | cost  | notes |
+| -------------- | ----- | ----- |
+| `edge`         | free  | Microsoft neural voices via edge-tts, no API key (default) |
+| `meme_classic` | free  | the iconic meme voices — Brian (British), Justin (kid/teen), Matthew (deep narrator), Kendra, Salli, Joey, Ivy, Joanna — via ttsmp3.com's free Polly-backed API. Keyless, no rate limits |
+| `tiktok`       | free  | classic TikTok meme voices (Jessie, Ghostface, Trickster…) via the unofficial WXA endpoint — increasingly unstable for anonymous calls; set `TIKTOK_SESSION_ID` for logged-in access, and failed synthesis automatically falls back to edge-tts then Brian (`meme_classic`) |
+| `google`       | free  | Google Translate TTS (`translate_tts`) — high-reliability fallback engine; voice id maps to the `tl` language code (en, en-GB…) |
+| `azure`        | paid  | same neural voices with an SLA — set `AZURE_*` env |
+| `elevenlabs`   | paid  | premium expressive voices — set `ELEVENLABS_API_KEY` |
 
 ### Adding a connector
 

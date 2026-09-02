@@ -20,7 +20,9 @@ class LLMProvider(str, Enum):
 
 class TTSProvider(str, Enum):
     edge = "edge"  # free (edge-tts, Azure neural voices)
-    tiktok = "tiktok"  # free (classic TikTok meme voices)
+    meme_classic = "meme_classic"  # free (Brian & the iconic meme voices)
+    tiktok = "tiktok"  # free (classic TikTok voices; auto-fallback when down)
+    google = "google"  # free (Google Translate TTS reliability fallback)
     azure = "azure"  # Azure Speech (paid tier)
     elevenlabs = "elevenlabs"
 
