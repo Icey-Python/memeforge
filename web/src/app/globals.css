@@ -234,3 +234,39 @@
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-ring: var(--sidebar-ring);
 }
+
+/*
+  ---break---
+*/
+
+/* Studio canvas: progressive node/edge reveal (stepwise mode).
+ * The animation targets the node's inner content — the React Flow
+ * wrapper itself is positioned via an inline transform that must not
+ * be overridden. */
+@keyframes node-reveal {
+	from {
+		opacity: 0;
+		transform: scale(0.92) translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+
+.react-flow__node.node-reveal > * {
+	animation: node-reveal 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes edge-reveal {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+.react-flow__edge.edge-reveal {
+	animation: edge-reveal 0.5s ease-out both;
+}
