@@ -1,9 +1,17 @@
 'use client';
 
 // Script Node: shows the generated script; every line stays editable.
+// Confirming the script unlocks the Voiceover + Gameplay nodes in
+// stepwise mode.
 
 import type { NodeProps } from '@xyflow/react';
-import { Plus, ScrollText, Trash2 } from 'lucide-react';
+import {
+	ArrowRight,
+	CheckCircle2,
+	Plus,
+	ScrollText,
+	Trash2
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { usePipelineStore } from '@/store/pipeline';
@@ -13,6 +21,8 @@ export function ScriptNode(_props: NodeProps) {
 	const scriptTitle = usePipelineStore((s) => s.scriptTitle);
 	const scriptLines = usePipelineStore((s) => s.scriptLines);
 	const setScriptLines = usePipelineStore((s) => s.setScriptLines);
+	const scriptConfirmed = usePipelineStore((s) => s.scriptConfirmed);
+	const confirmScript = usePipelineStore((s) => s.confirmScript);
 
 	const wordCount = scriptLines
 		.filter((l) => l.trim())
@@ -34,8 +44,12 @@ export function ScriptNode(_props: NodeProps) {
 			title="Script"
 			accent="bg-orange-500/15 text-orange-300"
 			badge={
-				<NodeBadge variant={scriptLines.length ? 'success' : 'default'}>
-					{scriptLines.length ? `${scriptLines.length} lines` : 'empty'}
+				<NodeBadge variant={scriptConfirmed ? 'success' : 'default'}>
+					{scriptConfirmed
+						? 'confirmed'
+						: scriptLines.length
+							? `${scriptLines.length} lines`
+							: 'empty'}
 				</NodeBadge>
 			}
 			footer={
@@ -96,6 +110,23 @@ export function ScriptNode(_props: NodeProps) {
 					>
 						<Plus className="size-3.5" /> Add line
 					</Button>
+
+					{!scriptConfirmed && (
+						<div className="space-y-1 pt-1">
+							<Button
+								onClick={confirmScript}
+								className="w-full gap-1.5 bg-orange-600 text-white hover:bg-orange-500"
+								data-testid="confirm-script"
+							>
+								<CheckCircle2 className="size-4" />
+								Confirm script
+								<ArrowRight className="size-4" />
+							</Button>
+							<p className="text-center text-[11px] leading-snug text-muted-foreground">
+								Unlocks the voiceover &amp; gameplay nodes
+							</p>
+						</div>
+					)}
 				</div>
 			)}
 		</NodeShell>

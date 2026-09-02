@@ -2,7 +2,8 @@
 
 // Desc: Studio pipeline state shared by every canvas node.
 // React Flow graph state (nodes/edges) lives in the canvas component;
-// this store holds the pipeline config + render job lifecycle.
+// this store holds the pipeline config, stepwise reveal progress,
+// and the render job lifecycle.
 
 import { create } from 'zustand';
 import { MemeforgeAPI } from '@/lib/memeforge';
@@ -20,6 +21,14 @@ interface PipelineStore {
 	gameplayId: string;
 	sfxEnabled: boolean;
 
+	// --- Stepwise reveal ---
+	/** Wizard mode: nodes reveal progressively (default ON). */
+	stepwise: boolean;
+	/** User confirmed the generated script — unlocks voiceover + gameplay. */
+	scriptConfirmed: boolean;
+	/** User picked a gameplay clip — unlocks the preview & export node. */
+	gameplayChosen: boolean;
+
 	// --- Lifecycle ---
 	generating: boolean;
 	generatingError: string | null;
@@ -36,6 +45,8 @@ interface PipelineStore {
 	setTtsVoice: (voice: string) => void;
 	setGameplay: (id: string) => void;
 	toggleSfx: () => void;
+	setStepwise: (stepwise: boolean) => void;
+	confirmScript: () => void;
 	generateScript: () => Promise<void>;
 	startRender: () => Promise<void>;
 	pollRenderJob: (jobId: string) => Promise<void>;
@@ -47,6 +58,40 @@ const VOICE_DEFAULTS: Record<TTSProviderId, string> = {
 	azure: 'en-US-ChristopherNeural',
 	elevenlabs: '21m00Tcm4TlvDq8ikWAM'
 };
+
+/** Wizard step metadata shown in the studio header + canvas hint. */
+export const STUDIO_STEPS = [
+	{
+		title: 'Connect',
+		hint: 'Pick a model and enter your meme topic.'
+	},
+	{
+		title: 'Script',
+		hint: 'Review your script, then confirm it to continue.'
+	},
+	{
+		title: 'Voice & gameplay',
+		hint: 'Choose a voice, then click a gameplay clip.'
+	},
+	{
+		title: 'Render',
+		hint: 'All wired up — render your short.'
+	}
+] as const;
+
+export type StudioStage = 1 | 2 | 3 | 4;
+
+/** Current wizard stage (1–4), derived from pipeline progress. */
+export function studioStage(s: {
+	scriptLines: string[];
+	scriptConfirmed: boolean;
+	gameplayChosen: boolean;
+}): StudioStage {
+	if (s.scriptConfirmed && s.gameplayChosen) return 4;
+	if (s.scriptConfirmed) return 3;
+	if (s.scriptLines.length > 0) return 2;
+	return 1;
+}
 
 export const usePipelineStore = create<PipelineStore>((set, get) => ({
 	topic: '',
@@ -62,6 +107,10 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 	gameplayId: 'minecraft-parkour',
 	sfxEnabled: true,
 
+	stepwise: true,
+	scriptConfirmed: false,
+	gameplayChosen: false,
+
 	generating: false,
 	generatingError: null,
 	renderJob: null,
@@ -75,8 +124,10 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 	setTtsProvider: (provider) =>
 		set({ ttsProvider: provider, ttsVoice: VOICE_DEFAULTS[provider] }),
 	setTtsVoice: (ttsVoice) => set({ ttsVoice }),
-	setGameplay: (gameplayId) => set({ gameplayId }),
+	setGameplay: (gameplayId) => set({ gameplayId, gameplayChosen: true }),
 	toggleSfx: () => set((s) => ({ sfxEnabled: !s.sfxEnabled })),
+	setStepwise: (stepwise) => set({ stepwise }),
+	confirmScript: () => set({ scriptConfirmed: true }),
 
 	generateScript: async () => {
 		const { topic, tone, model } = get();

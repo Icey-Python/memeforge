@@ -1,13 +1,15 @@
 'use client';
 
-// Studio top bar: brand, backend health indicator, nav.
+// Studio top bar: brand, stepwise mode toggle, step indicator, backend
+// health, nav.
 
 import { useQuery } from '@tanstack/react-query';
-import { Flame, Home, Loader2 } from 'lucide-react';
+import { Flame, Footprints, Home, LayoutGrid, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { MemeforgeAPI } from '@/lib/memeforge';
 import { cn } from '@/lib/utils';
+import { STUDIO_STEPS, studioStage, usePipelineStore } from '@/store/pipeline';
 
 export function StudioHeader() {
 	const { data: health, isLoading } = useQuery({
@@ -18,6 +20,18 @@ export function StudioHeader() {
 	});
 
 	const online = health?.status === 'ok';
+
+	const stepwise = usePipelineStore((s) => s.stepwise);
+	const setStepwise = usePipelineStore((s) => s.setStepwise);
+	const stage = usePipelineStore((s) => studioStage(s));
+
+	const modeButton = (active: boolean) =>
+		cn(
+			'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+			active
+				? 'bg-card text-foreground shadow-sm'
+				: 'text-muted-foreground hover:text-foreground'
+		);
 
 	return (
 		<header className="z-10 flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-card/70 px-4 backdrop-blur">
@@ -42,6 +56,44 @@ export function StudioHeader() {
 			</div>
 
 			<div className="flex items-center gap-3">
+				{/* Wizard step indicator */}
+				{stepwise && (
+					<span
+						className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex"
+						data-testid="stepwise-indicator"
+					>
+						<span className="rounded-full bg-fuchsia-500/15 px-2 py-0.5 font-semibold text-fuchsia-300">
+							Step {stage}/4
+						</span>
+						{STUDIO_STEPS[stage - 1].title}
+					</span>
+				)}
+
+				{/* Canvas mode toggle */}
+				<div
+					className="flex items-center rounded-full border border-border/60 bg-muted/40 p-0.5"
+					data-testid="mode-toggle"
+				>
+					<button
+						type="button"
+						onClick={() => setStepwise(true)}
+						aria-pressed={stepwise}
+						className={modeButton(stepwise)}
+					>
+						<Footprints className="size-3.5" />
+						<span className="hidden sm:inline">Step-by-step</span>
+					</button>
+					<button
+						type="button"
+						onClick={() => setStepwise(false)}
+						aria-pressed={!stepwise}
+						className={modeButton(!stepwise)}
+					>
+						<LayoutGrid className="size-3.5" />
+						<span className="hidden sm:inline">Show all</span>
+					</button>
+				</div>
+
 				{isLoading ? (
 					<Loader2 className="size-3.5 animate-spin text-muted-foreground" />
 				) : (
