@@ -26,7 +26,7 @@ const STEPS = [
 	{
 		icon: Film,
 		title: 'Forge the short',
-		body: 'Full-screen 1080×1920 gameplay, floating Reddit card, center captions.',
+		body: 'Full-screen 1080×1920 background, optional hook card, center captions.',
 		color: 'text-rose-300'
 	}
 ];
@@ -42,20 +42,20 @@ export default function Home() {
 
 			<div className="relative z-10 flex max-w-5xl flex-col items-center text-center">
 				<span className="mb-6 rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-1.5 text-sm text-fuchsia-300">
-					Reddit-style gaming meme videos, on autopilot
+					AI vertical video generation, on autopilot
 				</span>
 
 				<h1 className="text-balance text-5xl font-black leading-[1.05] tracking-tight md:text-7xl">
 					Turn any topic into a{' '}
 					<span className="bg-gradient-to-r from-fuchsia-400 via-violet-400 to-sky-400 bg-clip-text text-transparent">
-						viral meme short
+						scroll-stopping short
 					</span>
 				</h1>
 
 				<p className="mt-6 max-w-2xl text-balance text-lg leading-relaxed text-muted-foreground">
-					Memeforge wires your model connector, voiceover engine, and gameplay
-					loops into one visual pipeline — then renders viral-style vertical
-					1080×1920 shorts: full-screen gameplay, a floating Reddit post card,
+					Memeforge wires your model connector, voiceover engine, and background
+					clips into one visual pipeline — then renders viral-style vertical
+					1080×1920 shorts: full-screen video, an optional hook or quote card,
 					and kinetic captions with punchline SFX.
 				</p>
 

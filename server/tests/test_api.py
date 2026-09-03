@@ -33,6 +33,40 @@ def test_generate_script_mock():
     assert body["lines"][-1]["is_punchline"] is True
 
 
+def test_generate_script_duration_targets():
+    """60s default ≈ 130-150 words; 30s paces to roughly half."""
+
+    def words(payload):
+        resp = client.post("/api/v1/generate-script", json=payload)
+        assert resp.status_code == 200
+        body = resp.json()
+        word_count = sum(len(line["text"].split()) for line in body["lines"])
+        return word_count, len(body["lines"])
+
+    w30, l30 = words({"topic": "elden ring", "provider": "mock", "duration_target": 30})
+    w60, l60 = words(
+        {"topic": "elden ring", "provider": "mock", "duration_target": 60}
+    )
+    w90, l90 = words(
+        {"topic": "elden ring", "provider": "mock", "duration_target": 90}
+    )
+
+    # Word budget scales with the duration target (2.2-2.5 words/sec).
+    assert 60 <= w30 <= 90  # ~70 words
+    assert 120 <= w60 <= 160  # ~141 words (the classic short-form pacing)
+    assert w90 >= w60 > w30
+    # Line pacing: ~4s of speech per line (capped by max_lines default).
+    assert l30 < l60 <= 15 <= l90
+
+
+def test_generate_script_rejects_bad_duration_target():
+    resp = client.post(
+        "/api/v1/generate-script",
+        json={"topic": "x", "provider": "mock", "duration_target": 5},
+    )
+    assert resp.status_code == 422
+
+
 def test_models_catalog():
     resp = client.get("/api/v1/models")
     assert resp.status_code == 200
@@ -210,6 +244,18 @@ def test_render_rejects_unavailable_gameplay():
         },
     )
     assert resp.status_code == 400
+
+
+def test_render_rejects_unknown_card_style():
+    resp = client.post(
+        "/api/v1/render",
+        json={
+            "script": ["hello", "world"],
+            "gameplay_id": "does-not-exist",
+            "card_style": "nope",
+        },
+    )
+    assert resp.status_code == 422  # pydantic enum validation
 
 
 def test_voices_default_edge():

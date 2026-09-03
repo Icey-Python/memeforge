@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.core import settings
 from app.providers.llm import registry as llm_registry
+from app.providers.llm.base import default_line_count
 from app.schemas.render_schema import (
     LLMProvider,
     ModelDiscoveryRequest,
@@ -58,16 +59,29 @@ async def discover_models(request: ModelDiscoveryRequest):
 
 @script_router.post("/generate-script", response_model=ScriptResponse)
 async def generate_script(request: ScriptGenerateRequest):
-    """Generate a meme script about a topic with the selected model connector."""
+    """Generate a short-form video script about a topic with the selected
+    model connector.
+
+    `duration_target` paces the script: word budgets target ~2.2-2.5
+    words/sec of speech, so the 60s default yields ~130-150 words —
+    about a minute of speech. `max_lines` defaults to a duration-derived
+    pacing (~4s of speech per line) when omitted.
+    """
     provider = llm_registry.get_llm_provider(
         request.provider.value,
         model=request.model,
         base_url=request.base_url,
         api_key=request.api_key,
     )
+    effective_max_lines = (
+        request.max_lines or default_line_count(request.duration_target)
+    )
     try:
         script = await provider.generate_script(
-            topic=request.topic, tone=request.tone, max_lines=request.max_lines
+            topic=request.topic,
+            tone=request.tone,
+            max_lines=effective_max_lines,
+            duration_target=request.duration_target,
         )
     except Exception as exc:
         raise HTTPException(

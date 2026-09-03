@@ -1,6 +1,12 @@
 /** Offline fallbacks for backend catalogs (used before/without the API). */
 
-import type { LLMProviderId, TTSProviderId, VoiceOption } from '@/types/studio';
+import type {
+	CardStyleId,
+	DurationTarget,
+	LLMProviderId,
+	TTSProviderId,
+	VoiceOption
+} from '@/types/studio';
 
 export const LLM_PROVIDERS: {
 	id: LLMProviderId;
@@ -283,10 +289,28 @@ export const GOOGLE_VOICES: VoiceOption[] = [
 ];
 
 export const TONE_OPTIONS = [
-	{ id: 'reddit-commenter', label: 'Reddit commenter' },
+	{ id: 'casual-commenter', label: 'Casual commenter' },
 	{ id: 'unhinged-gamer', label: 'Unhinged gamer' },
 	{ id: 'deadpan', label: 'Deadpan narrator' },
 	{ id: 'hype', label: 'Hype commentator' }
+];
+
+/** Target duration presets: ~2.3 words/sec of spoken speech. */
+export const DURATION_OPTIONS: {
+	value: DurationTarget;
+	label: string;
+	hint: string;
+}[] = [
+	{ value: 30, label: '30 seconds', hint: '~70 words' },
+	{ value: 60, label: '60 seconds (default)', hint: '~140 words' },
+	{ value: 90, label: '90 seconds', hint: '~210 words' }
+];
+
+/** Top card overlay presets (rendered by the backend compositor). */
+export const CARD_STYLE_OPTIONS: { value: CardStyleId; label: string }[] = [
+	{ value: 'hook', label: 'Hook headline card' },
+	{ value: 'quote', label: 'Quote card' },
+	{ value: 'none', label: 'Clean full video (no card)' }
 ];
 
 export const GAMEPLAY_FALLBACK = [

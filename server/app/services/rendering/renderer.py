@@ -5,24 +5,24 @@ Runs a full pipeline as a background job:
     script lines ──▶ TTS per line ──▶ concat voiceover ──▶ ffmpeg compositor ──▶ mp4
         │                                                        ▲
         ├──▶ kinetic caption timeline (center frame) ──────────┤
-        └──▶ floating Reddit post card (Pillow) ──▶ upper-center overlay
+        └──▶ floating headline/quote card (Pillow) ──▶ upper-center overlay
 
-The gameplay loop fills the full 1080x1920 vertical frame; the Reddit
-post card floats upper-center and fades out once the hook (first line)
-has landed. The job store tracks progress; the frontend Preview &
-Export node polls `GET /api/v1/render/{job_id}` until status is
-completed/failed.
+The background loop fills the full 1080x1920 vertical frame; the top
+card floats upper-center and fades out once the hook (first line) has
+landed. Long background assets get a random seek in-point so every
+render surfaces fresh footage. The job store tracks progress; the
+frontend Preview & Export node polls `GET /api/v1/render/{job_id}`
+until status is completed/failed.
 """
 
 import asyncio
-import hashlib
 import re
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Sequence
 
 from app.core import settings
-from app.schemas.render_schema import JobStatus, RenderRequest
+from app.schemas.render_schema import CardStyle, JobStatus, RenderRequest
 from app.services import jobs as jobs_service
 from app.services.rendering import compositor
 from app.services.rendering.captions import build_caption_timeline
@@ -66,21 +66,15 @@ def _find_sfx() -> Optional[Path]:
     return None
 
 
-def _subreddit_handle(topic: str) -> str:
-    """r/ handle for the floating card, derived from the topic."""
-    slug = re.sub(r"[^a-z0-9]+", "", (topic or "").lower())[:20]
-    return f"r/{slug}" if slug else "r/gaming"
-
-
-def _viral_metrics(seed: str) -> dict:
-    """Deterministic, plausible-looking like/comment/share/award counts."""
-    n = int(hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12], 16)
-    return {
-        "upvotes": 3_000 + n % 480_000,
-        "comments": 80 + (n >> 12) % 4_000,
-        "shares": 40 + (n >> 24) % 9_000,
-        "awards": 2 + (n >> 28) % 3,
-    }
+def _card_title(request: RenderRequest) -> str:
+    """Headline for the top card: explicit title → topic → first line."""
+    if request.title:
+        return request.title
+    if request.topic:
+        return request.topic
+    first = request.script[0] if request.script else ""
+    first = re.sub(r"\s+", " ", first).strip()
+    return first[:70] or "the take"
 
 
 async def run_render_job(job_id: str, request: RenderRequest) -> None:
@@ -160,14 +154,6 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
             word_timings=line_word_timings,
         )
 
-        title = request.title or request.topic or "r/gaming"
-        card = compositor.build_reddit_post_card(
-            title=title,
-            out_path=workdir / "card.png",
-            handle=_subreddit_handle(request.topic or title),
-            **_viral_metrics(title),
-        )
-
         # Pre-render kinetic caption PNGs (Pillow) before the ffmpeg pass.
         caption_pngs = compositor.render_caption_pngs(captions, workdir)
 
@@ -180,6 +166,15 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
                 compositor.CARD_MAX_DISPLAY_S,
             )
 
+        # Top card: hook headline, quote card, or a clean full video.
+        card_path: Optional[Path] = None
+        if request.card_style is not CardStyle.none:
+            card_path = compositor.build_headline_card(
+                title=_card_title(request),
+                out_path=workdir / "card.png",
+                style=request.card_style.value,
+            )
+
         # --- 4. Compose -----------------------------------------------------------
         store.update(job_id, progress=0.6, message="Composing full-screen video")
         sfx = _find_sfx() if request.sfx_on_punchlines else None
@@ -187,18 +182,35 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
             [captions[-1].start] if sfx and captions else None
         )  # boom on the final punchline frame
 
+        # Long background assets: probe the clip length and pick a random
+        # in-point so repeated renders of the same asset surface fresh
+        # footage instead of always starting at 0:00.
+        background_seek: Optional[float] = None
+        requested_duration = compositor.final_cut_duration(
+            captions, total_audio_duration
+        )
+        if compositor.ffprobe_available():
+            try:
+                clip_duration = await compositor.probe_video_duration(gameplay)
+                background_seek = compositor.compute_background_seek(
+                    clip_duration, requested_duration
+                )
+            except (RuntimeError, asyncio.TimeoutError):
+                background_seek = None  # probing failed: play from the top
+
         output = settings.OUTPUT_DIR / f"{job_id}.mp4"
         cmd = compositor.compose_video(
             gameplay_path=gameplay,
             voiceover_path=voiceover,
             captions=captions,
             output_path=output,
-            card_path=card,
+            card_path=card_path,
             caption_pngs=caption_pngs,
             sfx_path=sfx,
             sfx_events=sfx_events,
             card_duration=card_duration,
             audio_duration=total_audio_duration,
+            background_seek=background_seek,
         )
         await compositor.run_ffmpeg(cmd)
 

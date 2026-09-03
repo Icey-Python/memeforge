@@ -11,7 +11,7 @@ export default function NotFound() {
 			<div>
 				<h1 className="text-4xl font-black tracking-tight">404</h1>
 				<p className="mt-2 text-muted-foreground">
-					This meme is so rare it does not exist yet.
+					This page is so rare it does not exist yet.
 				</p>
 			</div>
 			<Button asChild className="gap-2">

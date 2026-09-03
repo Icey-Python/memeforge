@@ -7,24 +7,38 @@
 
 import { create } from 'zustand';
 import { MemeforgeAPI } from '@/lib/memeforge';
-import type { ModelConfig, RenderJobInfo, TTSProviderId } from '@/types/studio';
+import { deriveScriptTitle, splitScriptText } from '@/lib/script-split';
+import type {
+	CardStyleId,
+	DurationTarget,
+	ModelConfig,
+	RenderJobInfo,
+	TTSProviderId
+} from '@/types/studio';
 
 interface PipelineStore {
 	// --- Config (one value per node type) ---
 	topic: string;
 	tone: string;
+	/** Target spoken length for script generation (seconds). */
+	durationTarget: DurationTarget;
 	model: ModelConfig;
+	scriptMode: 'generated' | 'custom';
 	scriptTitle: string;
 	scriptLines: string[];
+	/** Raw text block for the paste/write custom script flow. */
+	customScriptText: string;
 	ttsProvider: TTSProviderId;
 	ttsVoice: string;
 	gameplayId: string;
 	sfxEnabled: boolean;
+	/** Top card overlay style for the render. */
+	cardStyle: CardStyleId;
 
 	// --- Stepwise reveal ---
 	/** Wizard mode: nodes reveal progressively (default ON). */
 	stepwise: boolean;
-	/** User confirmed the generated script — unlocks voiceover + gameplay. */
+	/** User confirmed the script — unlocks voiceover + gameplay. */
 	scriptConfirmed: boolean;
 	/** User picked a gameplay clip — unlocks the preview & export node. */
 	gameplayChosen: boolean;
@@ -38,12 +52,18 @@ interface PipelineStore {
 	// --- Actions ---
 	setTopic: (topic: string) => void;
 	setTone: (tone: string) => void;
+	setDurationTarget: (target: DurationTarget) => void;
 	setModel: (patch: Partial<ModelConfig>) => void;
+	setScriptMode: (mode: 'generated' | 'custom') => void;
 	setScriptLines: (lines: string[]) => void;
 	setScriptTitle: (title: string) => void;
+	setCustomScriptText: (text: string) => void;
+	/** Split the pasted text into lines; unlocks voiceover & gameplay. */
+	applyCustomScript: () => void;
 	setTtsProvider: (provider: TTSProviderId) => void;
 	setTtsVoice: (voice: string) => void;
 	setGameplay: (id: string) => void;
+	setCardStyle: (style: CardStyleId) => void;
 	toggleSfx: () => void;
 	setStepwise: (stepwise: boolean) => void;
 	confirmScript: () => void;
@@ -66,15 +86,15 @@ const VOICE_DEFAULTS: Record<TTSProviderId, string> = {
 export const STUDIO_STEPS = [
 	{
 		title: 'Connect',
-		hint: 'Pick a model and enter your meme topic.'
+		hint: 'Pick a model and enter your video topic.'
 	},
 	{
 		title: 'Script',
-		hint: 'Review your script, then confirm it to continue.'
+		hint: 'Generate a script or paste your own, then confirm it.'
 	},
 	{
 		title: 'Voice & gameplay',
-		hint: 'Choose a voice, then click a gameplay clip.'
+		hint: 'Choose a voice, then click a background clip.'
 	},
 	{
 		title: 'Render',
@@ -98,17 +118,21 @@ export function studioStage(s: {
 
 export const usePipelineStore = create<PipelineStore>((set, get) => ({
 	topic: '',
-	tone: 'reddit-commenter',
+	tone: 'casual-commenter',
+	durationTarget: 60,
 	model: {
 		provider: 'mock',
 		model: 'memeforge-stub'
 	},
+	scriptMode: 'generated',
 	scriptTitle: '',
 	scriptLines: [],
+	customScriptText: '',
 	ttsProvider: 'edge',
 	ttsVoice: VOICE_DEFAULTS.edge,
 	gameplayId: 'minecraft-parkour',
 	sfxEnabled: true,
+	cardStyle: 'hook',
 
 	stepwise: true,
 	scriptConfirmed: false,
@@ -121,19 +145,38 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 
 	setTopic: (topic) => set({ topic }),
 	setTone: (tone) => set({ tone }),
+	setDurationTarget: (durationTarget) => set({ durationTarget }),
 	setModel: (patch) => set((s) => ({ model: { ...s.model, ...patch } })),
+	setScriptMode: (scriptMode) => set({ scriptMode }),
 	setScriptLines: (lines) => set({ scriptLines: lines }),
 	setScriptTitle: (scriptTitle) => set({ scriptTitle }),
+	setCustomScriptText: (customScriptText) => set({ customScriptText }),
+	applyCustomScript: () => {
+		const lines = splitScriptText(get().customScriptText);
+		if (lines.length === 0) {
+			set({ generatingError: 'Paste or write some script text first.' });
+			return;
+		}
+		// A custom script needs no LLM round-trip: splitting it directly
+		// unlocks the voiceover & gameplay steps (lines stay editable).
+		set({
+			scriptTitle: deriveScriptTitle(lines),
+			scriptLines: lines,
+			scriptConfirmed: true,
+			generatingError: null
+		});
+	},
 	setTtsProvider: (provider) =>
 		set({ ttsProvider: provider, ttsVoice: VOICE_DEFAULTS[provider] }),
 	setTtsVoice: (ttsVoice) => set({ ttsVoice }),
 	setGameplay: (gameplayId) => set({ gameplayId, gameplayChosen: true }),
+	setCardStyle: (cardStyle) => set({ cardStyle }),
 	toggleSfx: () => set((s) => ({ sfxEnabled: !s.sfxEnabled })),
 	setStepwise: (stepwise) => set({ stepwise }),
 	confirmScript: () => set({ scriptConfirmed: true }),
 
 	generateScript: async () => {
-		const { topic, tone, model } = get();
+		const { topic, tone, model, durationTarget } = get();
 		if (!topic.trim()) {
 			set({ generatingError: 'Enter a topic first.' });
 			return;
@@ -146,7 +189,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 				model: model.model || undefined,
 				base_url: model.baseUrl || undefined,
 				api_key: model.apiKey || undefined,
-				tone
+				tone,
+				duration_target: durationTarget
 			});
 			set({
 				generating: false,
@@ -174,6 +218,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 				tts_provider: s.ttsProvider,
 				tts_voice: s.ttsVoice,
 				gameplay_id: s.gameplayId,
+				card_style: s.cardStyle,
 				sfx_on_punchlines: s.sfxEnabled
 			});
 			set({

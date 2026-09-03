@@ -16,10 +16,13 @@ import {
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { CARD_STYLE_OPTIONS } from '@/lib/catalog';
 import { MemeforgeAPI, mediaUrl } from '@/lib/memeforge';
 import { cn } from '@/lib/utils';
 import { usePipelineStore } from '@/store/pipeline';
-import { NodeBadge, NodeShell } from '../node-shell';
+import type { CardStyleId } from '@/types/studio';
+import { NodeBadge, NodeShell, StudioSelect } from '../node-shell';
 
 function CheckItem({ ok, label }: { ok: boolean; label: string }) {
 	return (
@@ -46,6 +49,8 @@ export function PreviewNode(_props: NodeProps) {
 	const gameplayId = usePipelineStore((s) => s.gameplayId);
 	const sfxEnabled = usePipelineStore((s) => s.sfxEnabled);
 	const toggleSfx = usePipelineStore((s) => s.toggleSfx);
+	const cardStyle = usePipelineStore((s) => s.cardStyle);
+	const setCardStyle = usePipelineStore((s) => s.setCardStyle);
 	const renderJob = usePipelineStore((s) => s.renderJob);
 	const rendering = usePipelineStore((s) => s.rendering);
 	const startRender = usePipelineStore((s) => s.startRender);
@@ -64,7 +69,9 @@ export function PreviewNode(_props: NodeProps) {
 	const clipAvailable = clip?.available ?? false;
 
 	const hasScript = scriptLines.some((l) => l.trim());
-	const ready = topic.trim().length > 0 && hasScript && clipAvailable;
+	// A pasted custom script is a complete pipeline input on its own —
+	// rendering must not require a topic as well.
+	const ready = hasScript && clipAvailable;
 
 	// Poll the backend while a job is in flight.
 	useEffect(() => {
@@ -107,8 +114,25 @@ export function PreviewNode(_props: NodeProps) {
 			<ul className="space-y-1.5">
 				<CheckItem ok={topic.trim().length > 0} label="Topic set" />
 				<CheckItem ok={hasScript} label="Script lines" />
-				<CheckItem ok={clipAvailable} label="Gameplay clip available" />
+				<CheckItem ok={clipAvailable} label="Background clip available" />
 			</ul>
+
+			<div className="space-y-1.5">
+				<Label htmlFor="card-style-select">Top card</Label>
+				<StudioSelect
+					id="card-style-select"
+					value={cardStyle}
+					onChange={(v) => setCardStyle(v as CardStyleId)}
+					options={CARD_STYLE_OPTIONS.map((o) => ({
+						value: o.value,
+						label: o.label
+					}))}
+				/>
+				<p className="text-[11px] text-muted-foreground">
+					Hooks use your script title; “Clean” renders the full video without a
+					card overlay.
+				</p>
+			</div>
 
 			<label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
 				<input
@@ -190,7 +214,8 @@ export function PreviewNode(_props: NodeProps) {
 			{!ready && !rendering && !renderJob && (
 				<p className="text-[11px] leading-snug text-muted-foreground">
 					Connect the pipeline: model → topic → script → voiceover, plus a
-					gameplay clip with its asset dropped on the server.
+					background clip with its asset dropped on the server. Pasting a custom
+					script is enough — no topic needed.
 				</p>
 			)}
 		</NodeShell>

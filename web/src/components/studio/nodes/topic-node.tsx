@@ -1,14 +1,16 @@
 'use client';
 
-// Topic / Prompt Node: what the meme is about + script generation trigger.
+// Topic / Prompt Node: what the video is about + script generation
+// trigger (with target duration pacing).
 
 import type { NodeProps } from '@xyflow/react';
 import { Loader2, MessageSquareText, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { TONE_OPTIONS } from '@/lib/catalog';
+import { DURATION_OPTIONS, TONE_OPTIONS } from '@/lib/catalog';
 import { usePipelineStore } from '@/store/pipeline';
+import type { DurationTarget } from '@/types/studio';
 import { NodeBadge, NodeShell, StudioSelect } from '../node-shell';
 
 const TOPIC_IDEAS = [
@@ -23,6 +25,8 @@ export function TopicNode(_props: NodeProps) {
 	const setTopic = usePipelineStore((s) => s.setTopic);
 	const tone = usePipelineStore((s) => s.tone);
 	const setTone = usePipelineStore((s) => s.setTone);
+	const durationTarget = usePipelineStore((s) => s.durationTarget);
+	const setDurationTarget = usePipelineStore((s) => s.setDurationTarget);
 	const generating = usePipelineStore((s) => s.generating);
 	const error = usePipelineStore((s) => s.generatingError);
 	const generateScript = usePipelineStore((s) => s.generateScript);
@@ -74,6 +78,23 @@ export function TopicNode(_props: NodeProps) {
 						label: t.label
 					}))}
 				/>
+			</div>
+
+			<div className="space-y-1.5">
+				<Label htmlFor="duration-select">Target duration</Label>
+				<StudioSelect
+					id="duration-select"
+					value={String(durationTarget)}
+					onChange={(v) => setDurationTarget(Number(v) as DurationTarget)}
+					options={DURATION_OPTIONS.map((d) => ({
+						value: String(d.value),
+						label: `${d.label} · ${d.hint}`
+					}))}
+				/>
+				<p className="text-[11px] text-muted-foreground">
+					Scripts pace to ~2.3 words/sec — 60s ≈ 140 words, the sweet spot for
+					Shorts, TikTok &amp; Reels.
+				</p>
 			</div>
 
 			<Button

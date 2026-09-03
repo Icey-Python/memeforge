@@ -51,7 +51,7 @@ export function StudioHeader() {
 					</span>
 				</Link>
 				<span className="hidden rounded-full border border-border/60 px-2.5 py-0.5 text-xs text-muted-foreground sm:block">
-					Reddit-style meme video studio
+					Short-form video studio
 				</span>
 			</div>
 

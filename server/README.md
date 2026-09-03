@@ -1,11 +1,9 @@
 # Memeforge Server
 
 FastAPI backend for memeforge: LLM script generation, TTS voiceover, and
-full-screen vertical video rendering (1080x1920 Reddit-style shorts:
-gameplay fills the frame, Reddit post card floats on top).
-
-Based on the [fastapi-starter-boilerplate](https://github.com/Icey-Python/fastapi-starter-boilerplate)
-project layout, adapted for the memeforge pipeline domain.
+full-screen vertical video rendering (1080x1920 short-form videos: a
+background loop fills the frame, an optional hook/quote card floats on
+top).
 
 ## Quickstart
 
@@ -27,11 +25,11 @@ uvicorn app.main:app --reload --port 8000
 | GET    | `/health`                  | Liveness + capability report (ffmpeg, edge-tts) |
 | GET    | `/api/v1/models`           | LLM connector catalog                          |
 | POST   | `/api/v1/models/discover`  | Live model discovery (Ollama `/api/tags`, OpenAI-compatible `/v1/models`) |
-| POST   | `/api/v1/generate-script`  | Generate a meme script for a topic             |
+| POST   | `/api/v1/generate-script`  | Generate a paced short-form script for a topic (`duration_target` 30/60/90s) |
 | GET    | `/api/v1/voices`           | Voice catalog (`?provider=edge\|meme_classic\|tiktok\|google\|azure\|elevenlabs`) |
 | POST   | `/api/v1/tts`              | Synthesize speech, returns audio URL           |
-| GET    | `/api/v1/render/gameplays` | Gameplay loop catalog                          |
-| POST   | `/api/v1/render`           | Start an async render job                      |
+| GET    | `/api/v1/render/gameplays` | Background clip catalog                        |
+| POST   | `/api/v1/render`           | Start an async render job (`card_style`: hook/quote/none) |
 | GET    | `/api/v1/render/{job_id}`  | Poll render job status / result video URL      |
 
 ## Architecture
@@ -52,11 +50,11 @@ app/
 │   ├── jobs.py      # in-memory async render job registry
 │   └── rendering/
 │       ├── captions.py   # kinetic captions: 1-2 words/frame, center frame
-│       ├── compositor.py # full-screen ffmpeg graph + Pillow reddit card
+│       ├── compositor.py # full-screen ffmpeg graph + Pillow headline/quote card
 │       └── renderer.py   # pipeline orchestrator (TTS → captions → compose)
 ├── schemas/         # pydantic request/response models
 └── utils/
-    └── gameplays.py # gameplay loop catalog
+    └── gameplays.py # background clip catalog
 ```
 
 ### Render pipeline
@@ -66,15 +64,24 @@ app/
    TTS provider, measures durations with ffprobe, and stitches a voiceover.
 3. `captions.build_caption_timeline` chunks the script into 1-2 word kinetic
    caption frames (last line is the punchline).
-4. `compositor.build_reddit_post_card` renders the floating post card with
-   Pillow: avatar + subreddit handle + verified badge + award emojis + bold
-   title + like/comment/share metrics.
-5. `compositor.compose_video` assembles an ffmpeg filter graph: the gameplay
-   loop is scaled/cropped to fill the **full 1080x1920 frame**, the card is
-   overlaid upper-center (fading out after the hook line, ~3-5s), and the
-   caption PNGs burn in dead-center with heavy strokes
+4. `compositor.build_headline_card` renders the optional top card with
+   Pillow — `style="hook"` (bold headline) or `style="quote"` (oversized
+   quote marks); `card_style="none"` renders a clean full video.
+5. `compositor.compose_video` assembles an ffmpeg filter graph: the
+   background loop is scaled/cropped to fill the **full 1080x1920 frame**
+   (long assets start at a random seek in-point), the card is overlaid
+   upper-center (fading out after the hook line, ~3-5s), and the caption
+   PNGs burn in dead-center with heavy strokes
    (`[bg][card]overlay → caption overlays → drawtext-free H.264`).
 6. The result lands in `outputs/` and is served at `/outputs/{job}.mp4`.
+
+### Duration pacing
+
+`POST /api/v1/generate-script` takes a `duration_target` (default 60s,
+presets 30/60/90). Word budgets target ~2.2–2.5 words/sec of speech —
+60s ≈ 130–150 words, the standard pacing for YouTube Shorts, TikTok, and
+Reels — and the default line cap is ~4s of speech per line
+(`word_target()` / `default_line_count()` in `app/providers/llm/base.py`).
 
 ### TTS providers
 
@@ -94,10 +101,12 @@ app/
 - **TTS**: implement `BaseTTSProvider.synthesize()` in `app/providers/tts/`,
   then register it in `app/providers/tts/registry.py`.
 
-## Gameplay assets
+## Background assets
 
-Drop vertical gameplay loops into `assets/gameplay/<id>.mp4` (see
-`app/utils/gameplays.py` for catalog ids). A helper:
+Drop vertical background loops into `assets/gameplay/<id>.mp4` (see
+`app/utils/gameplays.py` for catalog ids). Long clips (longer than the
+requested video + 5s) automatically get a random seek in-point per render,
+so repeated renders surface fresh footage. A helper:
 
 ```bash
 ./scripts/fetch-gameplay.sh minecraft-parkour https://example.com/loop.mp4

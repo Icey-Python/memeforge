@@ -1,11 +1,7 @@
 # Memeforge Web
 
 Next.js (App Router, TypeScript, Tailwind CSS 4) frontend for memeforge with
-an interactive React Flow canvas for building meme generation pipelines.
-
-Based on the [zenetralabs/nextjs-template](https://github.com/zenetralabs/nextjs-template)
-(Prisma and all auth/dashboard boilerplate stripped — this app is a studio
-canvas, not a CRUD app).
+an interactive React Flow canvas for building short-form video pipelines.
 
 ## Quickstart
 
@@ -28,11 +24,16 @@ A React Flow (`@xyflow/react`) canvas with custom nodes:
 | Node                | What it does                                                     |
 | ------------------- | ---------------------------------------------------------------- |
 | **Model Connector** | Choose the LLM (OpenAI-compatible / Ollama / offline mock)       |
-| **Topic / Prompt**  | Enter the meme topic, pick a tone, trigger script generation     |
-| **Script**          | Editable script lines; last line = punchline (gets the SFX)      |
+| **Topic / Prompt**  | Enter the video topic, pick a tone + target duration (30/60/90s), trigger script generation |
+| **Script**          | Generated or pasted custom script; every line editable, reorderable, removable; last line = punchline (gets the SFX) |
 | **Voiceover / TTS** | Provider (TikTok meme voices / Edge-TTS / Azure / ElevenLabs) + voice picker with direct previews |
 | **Gameplay**        | Background loop picker (Minecraft Parkour, Subway Surfers, GTA…) |
-| **Preview & Export**| Render trigger, job progress, vertical 1080×1920 video player    |
+| **Preview & Export**| Card style (hook / quote / clean), render trigger, job progress, vertical 1080×1920 video player |
+
+The Script node has two modes: **Generated** (LLM, paced to the duration
+target) and **Custom** (paste/write your own script — it splits into timed
+lines by paragraphs and punctuation, no LLM call, and instantly unlocks the
+voiceover & gameplay steps).
 
 Pipeline state lives in a zustand store (`src/store/pipeline.ts`); nodes
 subscribe to the store so the whole graph stays in sync. The canvas itself
@@ -53,7 +54,7 @@ manages node/edge positions via `useNodesState`/`useEdgesState`.
 | `pnpm dev`        | Dev server (Turbopack)     |
 | `pnpm build`      | Production build           |
 | `pnpm typecheck`  | `tsc --noEmit`             |
-| `pnpm lint`       | ESLint                     |
+| `pnpm lint`       | Biome check                |
 | `pnpm lint-staged`| Biome on staged files      |
 
 ## Layout
@@ -76,7 +77,8 @@ src/
 ├── lib/
 │   ├── config.ts            # axios apiBase → ${SERVER_URL}/api/v1
 │   ├── memeforge.ts         # typed backend client
-│   └── catalog.ts           # offline fallback catalogs
+│   ├── catalog.ts           # offline fallback catalogs
+│   └── script-split.ts      # custom-script text → timed lines
 ├── store/pipeline.ts        # zustand pipeline + render job state
 └── types/studio.ts          # shared types
 ```

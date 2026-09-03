@@ -6,7 +6,7 @@ import { StudioHeader } from '@/components/studio/studio-header';
 export const metadata: Metadata = {
 	title: 'Studio',
 	description:
-		'Wire model connectors, voiceover, and gameplay into a vertical meme short.'
+		'Wire model connectors, voiceover, and background clips into a vertical short.'
 };
 
 export default function StudioPage() {

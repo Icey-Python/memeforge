@@ -2,6 +2,8 @@
 
 Deterministic, offline script generator used for local development and
 tests so the pipeline works end-to-end without any model or API key.
+Scripts are paced to the requested duration target (~2.2-2.5 words/sec
+of speech), so a 60-second target yields ~130-150 words.
 """
 
 import random
@@ -11,6 +13,7 @@ from app.providers.llm.base import (
     BaseLLMProvider,
     DiscoveredModel,
     GeneratedScript,
+    word_target,
 )
 
 _OPENERS = [
@@ -19,6 +22,29 @@ _OPENERS = [
     "The council has decided:",
     "Gamer fact nobody wanted:",
     "Unpopular opinion inbound:",
+]
+
+_BODY = [
+    "First off, {topic} is not a phase, it's a lifestyle.",
+    "My whole personality is basically {topic} at this point.",
+    "I told my squad about {topic} and now none of them talk to me.",
+    "They said {topic} builds character. They lied.",
+    "Every day I wake up and choose {topic} violence.",
+    "Nobody: ... Me: anyway, {topic}.",
+    "Sleep is temporary, {topic} is forever.",
+    "The tutorial never prepared me for {topic}.",
+    "My search history is just {topic} and regret.",
+    "I have three hobbies and all of them are {topic}.",
+    "My therapist says I lean on {topic} too much.",
+    "We do not talk about the {topic} incident.",
+    "Studies show {topic} improves nothing except vibes.",
+    "Half my screen time is {topic} content.",
+    "Nobody warned me {topic} would be this expensive.",
+    "{topic} walked so my sleep schedule could collapse.",
+    "I would trade my lunch for {topic}, and I love lunch.",
+    "Every group project needs one {topic} person. I'm it.",
+    "My camera roll is nine thousand {topic} screenshots.",
+    "The {topic} grind never stops, and neither do I.",
 ]
 
 _CLOSERS = [
@@ -46,26 +72,32 @@ class MockLLMProvider(BaseLLMProvider):
         ]
 
     async def generate_script(
-        self, topic: str, tone: str = "reddit-commenter", max_lines: int = 8
+        self, topic: str, tone: str = "casual-commenter", max_lines: int = 8,
+        duration_target: int = 60,
     ) -> GeneratedScript:
         rng = random.Random(topic)
-        body = [
-            f"First off, {topic} is not a phase, it's a lifestyle.",
-            f"My whole personality is basically {topic} at this point.",
-            f"I told my squad about {topic} and now none of them talk to me.",
-            f"They said {topic} builds character. They lied.",
-            f"Every day I wake up and choose {topic} violence.",
-            f"Nobody: ... Me: anyway, {topic}.",
-            f"Sleep is temporary, {topic} is forever.",
-            f"The tutorial never prepared me for {topic}.",
-        ]
-        lines = [
-            f"{rng.choice(_OPENERS)} {topic}.",
-            *body[: max(0, max_lines - 2)],
-            rng.choice(_CLOSERS),
-        ]
+        w_min, w_max = word_target(duration_target)
+        target_words = (w_min + w_max) // 2
+
+        opener = f"{rng.choice(_OPENERS)} {topic}."
+        lines = [opener]
+        words = len(opener.split())
+
+        # Fill the body until the word budget (or the line cap) is hit.
+        body_pool = [t.format(topic=topic) for t in _BODY]
+        rng.shuffle(body_pool)
+        while len(lines) < max(2, max_lines - 1) and words < target_words:
+            if not body_pool:
+                body_pool = [t.format(topic=topic) for t in _BODY]
+                rng.shuffle(body_pool)
+            body = body_pool.pop()
+            lines.append(body)
+            words += len(body.split())
+
+        closer = rng.choice(_CLOSERS)
+        lines.append(closer)
         # Mark the final line as the punchline (used for SFX timing later).
         return GeneratedScript(
-            title=f"r/gaming on {topic}",
+            title=f"the {topic} take",
             lines=lines[:max_lines],
         )

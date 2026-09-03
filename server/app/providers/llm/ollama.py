@@ -14,6 +14,7 @@ from app.providers.llm.base import (
     BaseLLMProvider,
     DiscoveredModel,
     GeneratedScript,
+    word_target,
 )
 
 
@@ -61,15 +62,20 @@ class OllamaProvider(BaseLLMProvider):
         return models
 
     async def generate_script(
-        self, topic: str, tone: str = "reddit-commenter", max_lines: int = 8
+        self, topic: str, tone: str = "casual-commenter", max_lines: int = 8,
+        duration_target: int = 60,
     ) -> GeneratedScript:
         if not self.is_configured():
             raise RuntimeError("Ollama provider has no base URL configured")
 
+        w_min, w_max = word_target(duration_target)
         prompt = (
-            f'Write a {tone} vertical video script about "{topic}". '
+            f'Write a {tone} vertical video script about "{topic}" for '
+            "short-form platforms (YouTube Shorts, TikTok, Reels). Target "
+            f"{duration_target} seconds of spoken speech — roughly "
+            f"{w_min}-{w_max} words in total. "
             "Respond ONLY with JSON: "
-            f'{{"title": "<r/gaming style title>", "lines": ["...", ...]}} with '
+            f'{{"title": "<short punchy title>", "lines": ["...", ...]}} with '
             f"exactly {max_lines} short spoken lines (1-12 words each). "
             "The last line must be a punchline."
         )
@@ -95,6 +101,6 @@ class OllamaProvider(BaseLLMProvider):
         if not lines:
             raise ValueError("Ollama response contained no usable lines")
         return GeneratedScript(
-            title=str(parsed.get("title", f"r/gaming on {topic}")),
+            title=str(parsed.get("title") or f"the {topic} take"),
             lines=lines[:max_lines],
         )

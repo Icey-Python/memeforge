@@ -15,6 +15,7 @@ from app.providers.llm.base import (
     BaseLLMProvider,
     DiscoveredModel,
     GeneratedScript,
+    word_target,
 )
 
 
@@ -72,21 +73,28 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         return models
 
     async def generate_script(
-        self, topic: str, tone: str = "reddit-commenter", max_lines: int = 8
+        self, topic: str, tone: str = "casual-commenter", max_lines: int = 8,
+        duration_target: int = 60,
     ) -> GeneratedScript:
         if not self.is_configured():
             raise RuntimeError("OpenAI-compatible provider has no base URL configured")
 
+        w_min, w_max = word_target(duration_target)
         payload = {
             "model": self.model,
             "messages": [
                 {
                     "role": "system",
                     "content": (
-                        f"You write {tone} vertical video scripts. Output JSON: "
-                        f'{{"title": string, "lines": string[{max_lines}]}}. '
-                        "Short spoken lines, 1-12 words each, last line is a punchline. "
-                        "No markdown."
+                        f"You write {tone} vertical video scripts for "
+                        "short-form platforms (YouTube Shorts, TikTok, "
+                        "Reels). Target "
+                        f"{duration_target} seconds of spoken speech — "
+                        f"roughly {w_min}-{w_max} words in total. "
+                        f'Output JSON: {{"title": string, "lines": '
+                        f"string[{max_lines}]}}. "
+                        "Short spoken lines, 1-12 words each, last line is "
+                        "a punchline. No markdown."
                     ),
                 },
                 {"role": "user", "content": f"Topic: {topic}"},
@@ -110,6 +118,6 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         if not lines:
             raise ValueError("LLM response contained no usable lines")
         return GeneratedScript(
-            title=str(parsed.get("title", f"r/gaming on {topic}")),
+            title=str(parsed.get("title") or f"the {topic} take"),
             lines=lines[:max_lines],
         )

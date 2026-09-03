@@ -1,11 +1,11 @@
 """Kinetic caption builder.
 
-Reddit-style shorts show 1-2 words per caption frame, centered in the
-middle of the vertical frame with a heavy stroke. This module chunks a
-script (plus per-line TTS audio durations) into caption frames; the
-compositor pre-renders each frame as a transparent PNG (Pillow) and
-burns them in with ffmpeg `overlay` filters — no `drawtext`/freetype
-dependency, so it works on any ffmpeg build.
+Short-form vertical videos show 1-2 words per caption frame, centered
+in the middle of the vertical frame with a heavy stroke. This module
+chunks a script (plus per-line TTS audio durations) into caption
+frames; the compositor pre-renders each frame as a transparent PNG
+(Pillow) and burns them in with ffmpeg `overlay` filters — no
+`drawtext`/freetype dependency, so it works on any ffmpeg build.
 
 Synchronization contract: `line_durations[i]` must be the *exact*
 duration of `lines[i]`'s synthesized audio segment (as probed from the

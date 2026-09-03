@@ -20,6 +20,8 @@ export interface GenerateScriptPayload {
 	base_url?: string;
 	api_key?: string;
 	tone?: string;
+	/** Target spoken length in seconds (30/60/90 presets). */
+	duration_target?: number;
 	max_lines?: number;
 }
 
@@ -86,6 +88,8 @@ export const MemeforgeAPI = {
 		tts_provider: string;
 		tts_voice?: string;
 		gameplay_id: string;
+		/** Top card overlay: 'hook' (headline), 'quote', or 'none'. */
+		card_style?: 'hook' | 'quote' | 'none';
 		sfx_on_punchlines: boolean;
 	}): Promise<{ job_id: string; status: string; status_url: string }> {
 		const { data } = await apiBase.post('/render', payload);

@@ -125,7 +125,7 @@ export function VoiceoverNode(_props: NodeProps) {
 					>
 						{isMemeClassic && (
 							<p className="text-[10px] text-muted-foreground">
-								The iconic Twitch/Reddit TTS voices — free, keyless, no limits.
+								The iconic Twitch meme TTS voices — free, keyless, no limits.
 							</p>
 						)}
 						{voiceOptions.map((v) => {
