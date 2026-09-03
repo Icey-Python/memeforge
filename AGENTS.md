@@ -18,6 +18,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - TTS/caption sync: `renderer.py` builds line durations from *probed* audio (never padded), `concat_audio` (compositor.py) stitches with the concat *filter* into WAV (gapless by default), and the final cut is audio + `VIDEO_TAIL_S` (0.3s tail). Live validation: `cd server && .venv/bin/python scripts/sync_check.py` (needs network for edge-tts).
 - Duration pacing is single-sourced in `app/providers/llm/base.py` (`word_target()`, `default_line_count()`) with the frontend mirror in `web/src/lib/script-split.ts` (~2.2–2.5 words/sec, ~4s/line). Change both together.
 - The tone id is `casual-commenter` (renamed from `reddit-commenter`); the top card is `build_headline_card(style="hook"|"quote")` — `card_style="none"` renders clean. Long background assets (> requested + `SEEK_MARGIN_S`) get a random seek in-point via `compute_background_seek`.
+- The wizard is 5 steps now: `studioStage()` gates on `scriptConfirmed` → `voiceConfirmed` → `backgroundChosen` (see `web/src/store/pipeline.ts`). Background comes from either a preset loop (`gameplay_id`) or `stock_clips`; the render endpoint requires exactly one of the two.
+- Stock video: providers live in `server/app/providers/stock/` (Pexels + Pixabay, portrait-only). Unkeyed mode serves curated demo clips from `pexels.py` — those CDN URLs can start 403ing over time, re-verify before relying on them. Keyword extraction (`stock/extract-keywords`) uses `complete_json` on the LLM providers with a heuristic fallback in `keywords.py`.
+- Stock stitch: `stitcher.py` downloads (size-capped) → `plan_clip_budgets` (repeat/trim to exact target) → ffmpeg concat into `background.mp4`; the renderer stitches AFTER TTS probing so the target is the exact final cut (probed audio + `VIDEO_TAIL_S`).
 
 ## Maintaining this file
 
