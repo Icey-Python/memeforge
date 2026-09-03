@@ -92,6 +92,15 @@ class BaseLLMProvider:
         """
         raise NotImplementedError
 
+    async def complete_json(self, system: str, user: str) -> dict:
+        """Single-shot JSON completion (system + user prompt).
+
+        Used by utility prompts (e.g. the stock-search keyword
+        extractor). Providers without a real model (mock) raise
+        NotImplementedError so callers can fall back to heuristics.
+        """
+        raise NotImplementedError
+
     def is_configured(self) -> bool:
         """Whether this connector has everything it needs to run."""
         return True

@@ -61,6 +61,34 @@ class OllamaProvider(BaseLLMProvider):
             )
         return models
 
+    async def complete_json(self, system: str, user: str) -> dict:
+        """Single-shot JSON completion via Ollama's native /api/chat."""
+        if not self.is_configured():
+            raise RuntimeError("Ollama provider has no base URL configured")
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "stream": False,
+            "format": "json",
+        }
+        url = f"{self.base_url.rstrip('/')}/api/chat"
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+
+        content = data.get("message", {}).get("content", "")
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Ollama returned non-JSON output: {content[:200]}"
+            ) from exc
+
     async def generate_script(
         self, topic: str, tone: str = "casual-commenter", max_lines: int = 8,
         duration_target: int = 60,

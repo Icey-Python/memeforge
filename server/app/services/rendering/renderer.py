@@ -85,19 +85,28 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
 
     workdir = Path(tempfile.mkdtemp(prefix=f"render-{job_id}-"))
     try:
-        # --- 1. Gameplay loop ------------------------------------------------
-        gameplay = None
-        from app.utils import gameplays as gameplays_util
+        # --- 1. Background source ----------------------------------------------
+        # Preset gameplay loop: resolve the local asset up front. Stock
+        # clips are downloaded + stitched AFTER the voiceover is probed
+        # (the stitch needs the exact target duration) in step 3b.
+        gameplay: Optional[Path] = None
+        if request.stock_clips:
+            store.update(job_id, progress=0.08,
+                         message="Stock-clip background selected")
+        else:
+            from app.utils import gameplays as gameplays_util
 
-        clip = gameplays_util.get_gameplay(request.gameplay_id)
-        if clip is None:
-            raise ValueError(f"Unknown gameplay id '{request.gameplay_id}'")
-        if not clip.available or not clip.source:
-            raise ValueError(
-                f"Gameplay clip '{clip.id}' has no source file. "
-                f"Place {clip.id}.mp4 in server/assets/gameplay/ first."
-            )
-        gameplay = Path(clip.source)
+            clip = gameplays_util.get_gameplay(request.gameplay_id or "")
+            if clip is None:
+                raise ValueError(
+                    f"Unknown gameplay id '{request.gameplay_id}'"
+                )
+            if not clip.available or not clip.source:
+                raise ValueError(
+                    f"Gameplay clip '{clip.id}' has no source file. "
+                    f"Place {clip.id}.mp4 in server/assets/gameplay/ first."
+                )
+            gameplay = Path(clip.source)
 
         # --- 2. TTS per line --------------------------------------------------
         # Sync contract: each line's caption window is built from the EXACT
@@ -144,7 +153,30 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
         elif line_durations:
             total_audio_duration = sum(line_durations)
 
-        # --- 3. Captions + card -------------------------------------------------
+        # --- 3. Background: stock clips → stitched continuous video -------------
+        if request.stock_clips:
+            from app.services.rendering import stitcher
+
+            store.update(
+                job_id, progress=0.5,
+                message=(
+                    f"Downloading stock clips "
+                    f"({len(request.stock_clips)} picked)"
+                ),
+            )
+            clips = await stitcher.download_stock_clips(request.stock_clips, workdir)
+            store.update(job_id, progress=0.55,
+                         message="Stitching multi-clip background")
+            # Target = the exact final cut (audio + tail), so the stitched
+            # background covers the whole render with cuts, no gaps.
+            target_duration = compositor.final_cut_duration(
+                [], total_audio_duration
+            )
+            gameplay = await stitcher.stitch_background(
+                clips, workdir / "background.mp4", target_duration
+            )
+
+        # --- 4. Captions + card -------------------------------------------------
         punchlines = {len(request.script) - 1}  # last line is the punchline
         captions = build_caption_timeline(
             request.script,
@@ -175,7 +207,7 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
                 style=request.card_style.value,
             )
 
-        # --- 4. Compose -----------------------------------------------------------
+        # --- 5. Compose -----------------------------------------------------------
         store.update(job_id, progress=0.6, message="Composing full-screen video")
         sfx = _find_sfx() if request.sfx_on_punchlines else None
         sfx_events = (
@@ -214,7 +246,7 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
         )
         await compositor.run_ffmpeg(cmd)
 
-        # --- 5. Done ---------------------------------------------------------------
+        # --- 6. Done ---------------------------------------------------------------
         store.update(
             job_id,
             status=JobStatus.completed,

@@ -47,6 +47,8 @@ export function PreviewNode(_props: NodeProps) {
 	const topic = usePipelineStore((s) => s.topic);
 	const scriptLines = usePipelineStore((s) => s.scriptLines);
 	const gameplayId = usePipelineStore((s) => s.gameplayId);
+	const backgroundMode = usePipelineStore((s) => s.backgroundMode);
+	const stockClips = usePipelineStore((s) => s.stockClips);
 	const sfxEnabled = usePipelineStore((s) => s.sfxEnabled);
 	const toggleSfx = usePipelineStore((s) => s.toggleSfx);
 	const cardStyle = usePipelineStore((s) => s.cardStyle);
@@ -66,12 +68,17 @@ export function PreviewNode(_props: NodeProps) {
 		staleTime: 60_000
 	});
 	const clip = (clips?.length ? clips : []).find((c) => c.id === gameplayId);
-	const clipAvailable = clip?.available ?? false;
+	// Background readiness depends on the active mode: preset loops need a
+	// bundled asset on the server; stock mode needs at least one picked clip.
+	const backgroundReady =
+		backgroundMode === 'stock'
+			? stockClips.length > 0
+			: Boolean(clip?.available);
 
 	const hasScript = scriptLines.some((l) => l.trim());
 	// A pasted custom script is a complete pipeline input on its own —
 	// rendering must not require a topic as well.
-	const ready = hasScript && clipAvailable;
+	const ready = hasScript && backgroundReady;
 
 	// Poll the backend while a job is in flight.
 	useEffect(() => {
@@ -114,7 +121,14 @@ export function PreviewNode(_props: NodeProps) {
 			<ul className="space-y-1.5">
 				<CheckItem ok={topic.trim().length > 0} label="Topic set" />
 				<CheckItem ok={hasScript} label="Script lines" />
-				<CheckItem ok={clipAvailable} label="Background clip available" />
+				<CheckItem
+					ok={backgroundReady}
+					label={
+						backgroundMode === 'stock'
+							? 'Stock clips picked'
+							: 'Background clip available'
+					}
+				/>
 			</ul>
 
 			<div className="space-y-1.5">

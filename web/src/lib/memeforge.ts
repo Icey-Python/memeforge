@@ -5,10 +5,13 @@ import axios from 'axios';
 import { apiBase, serverUrl } from '@/lib/config';
 import type {
 	GameplayClip,
+	KeywordExtractResponse,
 	ModelCatalogEntry,
 	ModelDiscoveryResult,
 	RenderJobInfo,
 	ScriptResponse,
+	StockClipSelection,
+	StockSearchResponse,
 	TTSProviderId,
 	VoiceOption
 } from '@/types/studio';
@@ -81,13 +84,38 @@ export const MemeforgeAPI = {
 		return data;
 	},
 
+	/** Search Pexels / Pixabay for vertical stock clips.
+	 * Falls back to curated demo clips when no API keys are set. */
+	async searchStock(query: string): Promise<StockSearchResponse> {
+		const { data } = await apiBase.get('/stock/search', {
+			params: { q: query }
+		});
+		return data;
+	},
+
+	/** Ask the configured LLM for 3-5 visual search queries from a script.
+	 * Falls back to a deterministic heuristic when the LLM is offline. */
+	async extractKeywords(payload: {
+		script: string;
+		provider: string;
+		model?: string;
+		base_url?: string;
+		api_key?: string;
+	}): Promise<KeywordExtractResponse> {
+		const { data } = await apiBase.post('/stock/extract-keywords', payload);
+		return data;
+	},
+
 	async startRender(payload: {
 		topic: string;
 		title: string;
 		script: string[];
 		tts_provider: string;
 		tts_voice?: string;
-		gameplay_id: string;
+		/** Preset gameplay loop id (when the background is a preset clip). */
+		gameplay_id?: string;
+		/** Stock clips stitched into the background (stock mode). */
+		stock_clips?: StockClipSelection[];
 		/** Top card overlay: 'hook' (headline), 'quote', or 'none'. */
 		card_style?: 'hook' | 'quote' | 'none';
 		sfx_on_punchlines: boolean;

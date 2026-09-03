@@ -43,6 +43,8 @@ export function VoiceoverNode(_props: NodeProps) {
 	const setTtsProvider = usePipelineStore((s) => s.setTtsProvider);
 	const ttsVoice = usePipelineStore((s) => s.ttsVoice);
 	const setTtsVoice = usePipelineStore((s) => s.setTtsVoice);
+	const voiceConfirmed = usePipelineStore((s) => s.voiceConfirmed);
+	const confirmVoice = usePipelineStore((s) => s.confirmVoice);
 
 	const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -245,6 +247,30 @@ export function VoiceoverNode(_props: NodeProps) {
 					{error}
 				</p>
 			)}
+
+			{/* Step 3 gate: confirming the voice unlocks the video background. */}
+			<Button
+				size="sm"
+				onClick={confirmVoice}
+				aria-pressed={voiceConfirmed}
+				data-testid="confirm-voice"
+				className={cn(
+					'w-full font-semibold',
+					voiceConfirmed
+						? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+						: 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-500 hover:to-teal-500'
+				)}
+			>
+				{voiceConfirmed ? (
+					<>
+						<Check className="size-4" /> Voice confirmed
+					</>
+				) : (
+					<>
+						<Check className="size-4" /> Confirm Voice &amp; Next ➔
+					</>
+				)}
+			</Button>
 		</NodeShell>
 	);
 }

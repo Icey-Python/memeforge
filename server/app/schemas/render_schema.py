@@ -156,6 +156,16 @@ class TTSResponse(BaseModel):
 # --- Rendering -------------------------------------------------------------
 
 
+class StockClipRef(BaseModel):
+    """One picked stock clip (Pexels / Pixabay) for the render background."""
+
+    provider: str = Field(..., description="Stock provider: 'pexels' or 'pixabay'")
+    id: str = Field(..., description="Clip id at the provider")
+    url: str = Field(..., description="Direct download URL of the clip")
+    duration_s: float = Field(..., ge=0.1, description="Clip duration in seconds")
+    label: str = Field(default="", description="Display title (thumbnail tooltip)")
+
+
 class RenderRequest(BaseModel):
     topic: str = ""
     title: str = Field(
@@ -165,7 +175,21 @@ class RenderRequest(BaseModel):
     script: List[str] = Field(..., min_length=1)
     tts_provider: TTSProvider = Field(default=TTSProvider.edge)
     tts_voice: Optional[str] = None
-    gameplay_id: str = Field(..., description="Background loop id from /api/v1/render/gameplays")
+    gameplay_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Background loop id from /api/v1/render/gameplays "
+            "(preset clips; required when stock_clips is empty)"
+        ),
+    )
+    stock_clips: List[StockClipRef] = Field(
+        default=[],
+        description=(
+            "Stock clips (Pexels / Pixabay) stitched into the background; "
+            "when set, overrides gameplay_id. Multiple clips are "
+            "concatenated with cuts to cover the voiceover duration."
+        ),
+    )
     card_style: CardStyle = Field(
         default=CardStyle.hook,
         description=(
@@ -214,3 +238,59 @@ class VoiceOption(BaseModel):
     language: str
     gender: str
     tags: List[str] = []
+
+
+# --- Stock video search (Pexels / Pixabay) -----------------------------------
+
+
+class StockVideoResult(BaseModel):
+    """One searchable vertical stock clip (normalized across providers)."""
+
+    id: str
+    provider: str
+    title: str
+    duration_s: float
+    width: int
+    height: int
+    thumbnail_url: str = ""
+    video_url: str
+    author: str = ""
+    is_demo: bool = False
+
+
+class StockProviderInfo(BaseModel):
+    id: str
+    label: str
+    keyed: bool
+
+
+class StockSearchResponse(BaseModel):
+    query: str
+    videos: List[StockVideoResult]
+    providers: List[StockProviderInfo]
+    notice: Optional[str] = None
+
+
+class KeywordExtractRequest(BaseModel):
+    script: str = Field(
+        ...,
+        min_length=1,
+        max_length=20000,
+        description="The full script text (lines joined by newlines)",
+    )
+    provider: LLMProvider = Field(
+        default=LLMProvider.mock,
+        description="LLM connector used for extraction (mock → heuristic)",
+    )
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+
+
+class KeywordExtractResponse(BaseModel):
+    queries: List[str] = Field(
+        ..., description="3-5 visual stock-video search queries"
+    )
+    source: str = Field(
+        ..., description="'llm' when the model produced the queries, else 'heuristic'"
+    )

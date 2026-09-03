@@ -63,7 +63,7 @@ export function StudioHeader() {
 						data-testid="stepwise-indicator"
 					>
 						<span className="rounded-full bg-fuchsia-500/15 px-2 py-0.5 font-semibold text-fuchsia-300">
-							Step {stage}/4
+							Step {stage}/5
 						</span>
 						{STUDIO_STEPS[stage - 1].title}
 					</span>
