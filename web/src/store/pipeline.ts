@@ -13,8 +13,11 @@ import type {
 	DurationTarget,
 	ModelConfig,
 	RenderJobInfo,
+	StockClipSelection,
 	TTSProviderId
 } from '@/types/studio';
+
+export type BackgroundMode = 'preset' | 'stock';
 
 interface PipelineStore {
 	// --- Config (one value per node type) ---
@@ -30,7 +33,12 @@ interface PipelineStore {
 	customScriptText: string;
 	ttsProvider: TTSProviderId;
 	ttsVoice: string;
+	/** Preset gameplay loop id (background mode "preset"). */
 	gameplayId: string;
+	/** Which background tab is active / what the render will use. */
+	backgroundMode: BackgroundMode;
+	/** Stock clips picked for the background (mode "stock"), in order. */
+	stockClips: StockClipSelection[];
 	sfxEnabled: boolean;
 	/** Top card overlay style for the render. */
 	cardStyle: CardStyleId;
@@ -38,10 +46,12 @@ interface PipelineStore {
 	// --- Stepwise reveal ---
 	/** Wizard mode: nodes reveal progressively (default ON). */
 	stepwise: boolean;
-	/** User confirmed the script — unlocks voiceover + gameplay. */
+	/** User confirmed the script — unlocks the voiceover node. */
 	scriptConfirmed: boolean;
-	/** User picked a gameplay clip — unlocks the preview & export node. */
-	gameplayChosen: boolean;
+	/** User confirmed the voice — unlocks the video background node. */
+	voiceConfirmed: boolean;
+	/** User confirmed the background — unlocks the preview & export node. */
+	backgroundChosen: boolean;
 
 	// --- Lifecycle ---
 	generating: boolean;
@@ -58,15 +68,24 @@ interface PipelineStore {
 	setScriptLines: (lines: string[]) => void;
 	setScriptTitle: (title: string) => void;
 	setCustomScriptText: (text: string) => void;
-	/** Split the pasted text into lines; unlocks voiceover & gameplay. */
+	/** Split the pasted text into lines; unlocks the voiceover step. */
 	applyCustomScript: () => void;
 	setTtsProvider: (provider: TTSProviderId) => void;
 	setTtsVoice: (voice: string) => void;
+	/** Select a preset gameplay clip (background mode "preset"). */
 	setGameplay: (id: string) => void;
+	/** Switch between the preset loop + stock video background tabs. */
+	setBackgroundMode: (mode: BackgroundMode) => void;
+	/** Add/remove a stock clip from the ordered background selection. */
+	toggleStockClip: (clip: StockClipSelection) => void;
 	setCardStyle: (style: CardStyleId) => void;
 	toggleSfx: () => void;
 	setStepwise: (stepwise: boolean) => void;
 	confirmScript: () => void;
+	/** Complete Step 3 (voice) — reveals the video background node. */
+	confirmVoice: () => void;
+	/** Complete Step 4 (background) — reveals the preview & export node. */
+	confirmBackground: () => void;
 	generateScript: () => Promise<void>;
 	startRender: () => Promise<void>;
 	pollRenderJob: (jobId: string) => Promise<void>;
@@ -93,8 +112,12 @@ export const STUDIO_STEPS = [
 		hint: 'Generate a script or paste your own, then confirm it.'
 	},
 	{
-		title: 'Voice & gameplay',
-		hint: 'Choose a voice, then click a background clip.'
+		title: 'Voice',
+		hint: 'Choose a voice, preview it, then confirm to continue.'
+	},
+	{
+		title: 'Video Background',
+		hint: 'Pick a preset gameplay loop or search stock video, then confirm.'
 	},
 	{
 		title: 'Render',
@@ -102,15 +125,17 @@ export const STUDIO_STEPS = [
 	}
 ] as const;
 
-export type StudioStage = 1 | 2 | 3 | 4;
+export type StudioStage = 1 | 2 | 3 | 4 | 5;
 
-/** Current wizard stage (1–4), derived from pipeline progress. */
+/** Current wizard stage (1–5), derived from pipeline progress. */
 export function studioStage(s: {
 	scriptLines: string[];
 	scriptConfirmed: boolean;
-	gameplayChosen: boolean;
+	voiceConfirmed: boolean;
+	backgroundChosen: boolean;
 }): StudioStage {
-	if (s.scriptConfirmed && s.gameplayChosen) return 4;
+	if (s.scriptConfirmed && s.backgroundChosen) return 5;
+	if (s.scriptConfirmed && s.voiceConfirmed) return 4;
 	if (s.scriptConfirmed) return 3;
 	if (s.scriptLines.length > 0) return 2;
 	return 1;
@@ -131,12 +156,15 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 	ttsProvider: 'edge',
 	ttsVoice: VOICE_DEFAULTS.edge,
 	gameplayId: 'minecraft-parkour',
+	backgroundMode: 'preset',
+	stockClips: [],
 	sfxEnabled: true,
 	cardStyle: 'hook',
 
 	stepwise: true,
 	scriptConfirmed: false,
-	gameplayChosen: false,
+	voiceConfirmed: false,
+	backgroundChosen: false,
 
 	generating: false,
 	generatingError: null,
@@ -158,7 +186,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 			return;
 		}
 		// A custom script needs no LLM round-trip: splitting it directly
-		// unlocks the voiceover & gameplay steps (lines stay editable).
+		// unlocks the voiceover step (lines stay editable).
 		set({
 			scriptTitle: deriveScriptTitle(lines),
 			scriptLines: lines,
@@ -169,11 +197,24 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 	setTtsProvider: (provider) =>
 		set({ ttsProvider: provider, ttsVoice: VOICE_DEFAULTS[provider] }),
 	setTtsVoice: (ttsVoice) => set({ ttsVoice }),
-	setGameplay: (gameplayId) => set({ gameplayId, gameplayChosen: true }),
+	setGameplay: (gameplayId) => set({ gameplayId, backgroundMode: 'preset' }),
+	setBackgroundMode: (backgroundMode) => set({ backgroundMode }),
+	toggleStockClip: (clip) =>
+		set((s) => {
+			const picked = s.stockClips.some((c) => c.url === clip.url);
+			return {
+				backgroundMode: 'stock',
+				stockClips: picked
+					? s.stockClips.filter((c) => c.url !== clip.url)
+					: [...s.stockClips, clip]
+			};
+		}),
 	setCardStyle: (cardStyle) => set({ cardStyle }),
 	toggleSfx: () => set((s) => ({ sfxEnabled: !s.sfxEnabled })),
 	setStepwise: (stepwise) => set({ stepwise }),
 	confirmScript: () => set({ scriptConfirmed: true }),
+	confirmVoice: () => set({ voiceConfirmed: true }),
+	confirmBackground: () => set({ backgroundChosen: true }),
 
 	generateScript: async () => {
 		const { topic, tone, model, durationTarget } = get();
@@ -210,6 +251,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 		const s = get();
 		if (s.rendering) return;
 		set({ rendering: true, renderJob: null });
+		const useStock = s.backgroundMode === 'stock' && s.stockClips.length > 0;
 		try {
 			const accepted = await MemeforgeAPI.startRender({
 				topic: s.topic,
@@ -217,7 +259,10 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 				script: s.scriptLines.filter((l) => l.trim().length > 0),
 				tts_provider: s.ttsProvider,
 				tts_voice: s.ttsVoice,
-				gameplay_id: s.gameplayId,
+				// Background: stitched stock clips (stock mode) or the preset
+				// gameplay loop — the backend requires exactly one of them.
+				gameplay_id: useStock ? undefined : s.gameplayId,
+				stock_clips: useStock ? s.stockClips : undefined,
 				card_style: s.cardStyle,
 				sfx_on_punchlines: s.sfxEnabled
 			});

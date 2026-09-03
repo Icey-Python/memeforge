@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
+from app.core import settings
 from app.schemas.render_schema import (
     JobStatus,
     RenderAccepted,
@@ -21,28 +22,66 @@ async def list_gameplay_clips():
     return [clip.model_dump() for clip in gameplays.list_gameplays()]
 
 
+def _validate_stock_clips(request: RenderRequest) -> None:
+    """Stock-clip payload guards (count + provider allowlist)."""
+    if len(request.stock_clips) > settings.STOCK_MAX_CLIPS:
+        raise HTTPException(
+            400,
+            detail=(
+                f"Too many stock clips ({len(request.stock_clips)}); "
+                f"the limit is {settings.STOCK_MAX_CLIPS}."
+            ),
+        )
+    valid_providers = {"pexels", "pixabay"}
+    for clip in request.stock_clips:
+        if clip.provider not in valid_providers:
+            raise HTTPException(
+                400,
+                detail=(
+                    f"Unknown stock provider '{clip.provider}' "
+                    f"(expected one of {sorted(valid_providers)})."
+                ),
+            )
+
+
 @render_router.post("/render", response_model=RenderAccepted)
 async def start_render(
     request: RenderRequest, background_tasks: BackgroundTasks
 ):
-    """Queue a full-screen vertical video render as a background job."""
+    """Queue a full-screen vertical video render as a background job.
+
+    Background source: preset gameplay loop (`gameplay_id`) OR a list
+    of picked stock clips (`stock_clips`, Pexels / Pixabay) that get
+    stitched into one continuous background.
+    """
     if not compositor.ffmpeg_available():
         raise HTTPException(
             status_code=503,
             detail="ffmpeg binary not found on PATH; install ffmpeg to render.",
         )
 
-    clip = gameplays.get_gameplay(request.gameplay_id)
-    if clip is None:
+    if request.stock_clips:
+        _validate_stock_clips(request)
+    elif request.gameplay_id:
+        clip = gameplays.get_gameplay(request.gameplay_id)
+        if clip is None:
+            raise HTTPException(
+                400, detail=f"Unknown gameplay_id '{request.gameplay_id}'"
+            )
+        if not clip.available:
+            raise HTTPException(
+                409,
+                detail=(
+                    f"Gameplay clip '{clip.id}' has no source file. "
+                    f"Place a {clip.id}.mp4 loop in server/assets/gameplay/."
+                ),
+            )
+    else:
         raise HTTPException(
-            400, detail=f"Unknown gameplay_id '{request.gameplay_id}'"
-        )
-    if not clip.available:
-        raise HTTPException(
-            status_code=409,
+            400,
             detail=(
-                f"Gameplay clip '{clip.id}' has no source file. "
-                f"Place a {clip.id}.mp4 loop in server/assets/gameplay/."
+                "No background source: set gameplay_id (preset loop) or "
+                "stock_clips (Pexels / Pixabay picks)."
             ),
         )
 

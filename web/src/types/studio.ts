@@ -62,6 +62,45 @@ export interface GameplayClip {
 	available: boolean;
 }
 
+/** One normalized vertical stock clip (Pexels / Pixabay). */
+export interface StockVideoResult {
+	id: string;
+	/** "pexels" | "pixabay" */
+	provider: string;
+	title: string;
+	duration_s: number;
+	width: number;
+	height: number;
+	thumbnail_url: string;
+	video_url: string;
+	author: string;
+	/** Curated fallback clip (unkeyed demo mode). */
+	is_demo: boolean;
+}
+
+export interface StockProviderInfo {
+	id: string;
+	label: string;
+	/** API key configured server-side? */
+	keyed: boolean;
+}
+
+export interface StockSearchResponse {
+	query: string;
+	videos: StockVideoResult[];
+	providers: StockProviderInfo[];
+	notice: string | null;
+}
+
+/** A stock clip picked for the render background (sent to /render). */
+export interface StockClipSelection {
+	provider: string;
+	id: string;
+	url: string;
+	duration_s: number;
+	label: string;
+}
+
 export interface VoiceOption {
 	id: string;
 	label: string;
@@ -87,4 +126,9 @@ export interface RenderJobInfo {
 	message?: string | null;
 	videoUrl?: string | null;
 	error?: string | null;
+}
+
+export interface KeywordExtractResponse {
+	queries: string[];
+	source: 'llm' | 'heuristic';
 }

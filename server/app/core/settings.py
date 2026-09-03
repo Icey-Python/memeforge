@@ -80,6 +80,26 @@ ELEVENLABS_DEFAULT_VOICE = os.getenv(
     "ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"
 )
 
+# --- Stock video providers (Pexels / Pixabay) --------------------------------
+
+# Free-tier API keys from https://www.pexels.com/api/ and
+# https://pixabay.com/api/docs/. Without keys the stock search falls
+# back to a small set of curated demo clips (see providers/stock/).
+PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
+PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "")
+
+# Stock search / download tuning.
+STOCK_SEARCH_TIMEOUT_S = float(os.getenv("MEMEFORGE_STOCK_SEARCH_TIMEOUT_S", "15.0"))
+STOCK_DOWNLOAD_TIMEOUT_S = float(
+    os.getenv("MEMEFORGE_STOCK_DOWNLOAD_TIMEOUT_S", "120.0")
+)
+# Hard cap per downloaded stock clip (bytes) — guards against huge 4K files.
+STOCK_MAX_CLIP_BYTES = int(
+    os.getenv("MEMEFORGE_STOCK_MAX_CLIP_BYTES", str(250 * 1024 * 1024))
+)
+# Max stock clips stitched into one background.
+STOCK_MAX_CLIPS = int(os.getenv("MEMEFORGE_STOCK_MAX_CLIPS", "12"))
+
 # --- Rendering ------------------------------------------------------------
 
 # Vertical short format: full-screen background loop with an optional

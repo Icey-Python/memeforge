@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.endpoints.health import health_router
 from app.api.endpoints.render import render_router
 from app.api.endpoints.script import script_router
+from app.api.endpoints.stock import stock_router
 from app.api.endpoints.tts import tts_router
 from app.core.settings import API_V1_PREFIX
 
@@ -27,3 +28,4 @@ router.include_router(health_router)
 router.include_router(script_router, prefix=API_V1_PREFIX)
 router.include_router(tts_router, prefix=API_V1_PREFIX)
 router.include_router(render_router, prefix=API_V1_PREFIX)
+router.include_router(stock_router, prefix=API_V1_PREFIX)

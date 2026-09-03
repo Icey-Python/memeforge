@@ -90,8 +90,8 @@ const NODE_STAGE: Record<string, number> = {
 	topic: 1,
 	script: 2,
 	voiceover: 3,
-	gameplay: 3,
-	preview: 4
+	gameplay: 4,
+	preview: 5
 };
 
 // --- Initial graph -----------------------------------------------------------
@@ -129,14 +129,14 @@ function initialNodes(): Node[] {
 		{
 			id: 'gameplay',
 			type: 'gameplay',
-			position: { x: 800, y: 460 },
+			position: { x: 1600, y: 0 },
 			data: {},
 			className: 'node-reveal'
 		},
 		{
 			id: 'preview',
 			type: 'preview',
-			position: { x: 1600, y: 140 },
+			position: { x: 2000, y: 140 },
 			data: {},
 			className: 'node-reveal'
 		}
@@ -167,9 +167,9 @@ function initialEdges(): Edge[] {
 			className: 'edge-reveal'
 		},
 		{
-			id: 'e-voiceover-preview',
+			id: 'e-voiceover-gameplay',
 			source: 'voiceover',
-			target: 'preview',
+			target: 'gameplay',
 			animated: true,
 			className: 'edge-reveal'
 		},
@@ -357,7 +357,7 @@ function Canvas() {
 						data-testid="stepwise-hint"
 					>
 						<span className="font-semibold text-foreground">
-							Step {stage} of 4
+							Step {stage} of 5
 						</span>
 						<span className="mx-1.5 text-border">·</span>
 						{STUDIO_STEPS[stage - 1].hint}
