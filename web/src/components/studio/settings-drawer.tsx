@@ -56,7 +56,7 @@ interface FieldDef {
 	plaintext?: boolean;
 }
 
-const LLM_FIELDS: FieldDef[] = [
+export const LLM_FIELDS: FieldDef[] = [
 	{
 		field: 'openaiApiKey',
 		label: 'OpenAI API Key',

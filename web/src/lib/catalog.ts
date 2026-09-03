@@ -1,43 +1,159 @@
 /** Offline fallbacks for backend catalogs (used before/without the API). */
 
 import type {
+	ApiKeys,
 	CardStyleId,
 	DurationTarget,
+	LLMGatewayId,
 	LLMProviderId,
+	ModelConfig,
 	TTSProviderId,
 	VoiceOption
 } from '@/types/studio';
 
-export const LLM_PROVIDERS: {
-	id: LLMProviderId;
+/**
+ * Model Connector presets shown in the node's Provider dropdown.
+ *
+ * Cloud gateways (OpenAI / Anthropic / OpenRouter / Groq) all ride the
+ * backend's OpenAI-compatible provider; the preset base URL routes
+ * credentials to the matching vault key (hostname matching in
+ * lib/credentials.ts). "custom" points at any OpenAI-compatible endpoint
+ * (LM Studio, vLLM, …) with an optional inline key.
+ */
+export interface LLMProviderPreset {
+	/** Stable dropdown value (frontend-only; never sent to the backend). */
+	id: LLMGatewayId;
+	/** Backend provider id used in API payloads. */
+	backend: LLMProviderId;
 	label: string;
 	hint: string;
+	/** Model pre-selected before the endpoint has been queried. */
 	defaultModel: string;
-	/** Pre-filled base URL (Ollama default); blank falls back to server .env. */
-	defaultBaseUrl: string;
-}[] = [
+	/** Preset base URL ('' = provider default endpoint). */
+	baseUrl: string;
+	/** Vault key backing this gateway (named cloud gateways only). */
+	vaultKey?: keyof ApiKeys;
+	/** /health capability flag for the server .env default key. */
+	serverFlag?: string;
+}
+
+export const LLM_PROVIDERS: LLMProviderPreset[] = [
 	{
 		id: 'mock',
+		backend: 'mock',
 		label: 'Mock (offline)',
-		hint: 'Deterministic stub — no model required',
+		hint: 'deterministic stub — no key needed',
 		defaultModel: 'memeforge-stub',
-		defaultBaseUrl: ''
-	},
-	{
-		id: 'openai',
-		label: 'OpenAI-compatible',
-		hint: 'OpenAI, OpenRouter, LM Studio, vLLM…',
-		defaultModel: 'gpt-4o-mini',
-		defaultBaseUrl: ''
+		baseUrl: ''
 	},
 	{
 		id: 'ollama',
+		backend: 'ollama',
 		label: 'Ollama (local)',
-		hint: 'Local models via your Ollama daemon',
+		hint: 'installed models via your daemon',
 		defaultModel: 'llama3.2',
-		defaultBaseUrl: 'http://localhost:11434'
+		baseUrl: 'http://localhost:11434'
+	},
+	{
+		id: 'openai',
+		backend: 'openai',
+		label: 'OpenAI',
+		hint: 'GPT models via api.openai.com',
+		defaultModel: 'gpt-4o-mini',
+		baseUrl: '',
+		vaultKey: 'openaiApiKey',
+		serverFlag: 'llm_openai'
+	},
+	{
+		id: 'anthropic',
+		backend: 'openai',
+		label: 'Anthropic',
+		hint: 'Claude models',
+		defaultModel: 'claude-sonnet-4-5',
+		baseUrl: 'https://api.anthropic.com/v1',
+		vaultKey: 'anthropicApiKey',
+		serverFlag: 'llm_anthropic'
+	},
+	{
+		id: 'openrouter',
+		backend: 'openai',
+		label: 'OpenRouter',
+		hint: '400+ models, one key',
+		defaultModel: 'openrouter/auto',
+		baseUrl: 'https://openrouter.ai/api/v1',
+		vaultKey: 'openrouterApiKey',
+		serverFlag: 'llm_openrouter'
+	},
+	{
+		id: 'groq',
+		backend: 'openai',
+		label: 'Groq',
+		hint: 'ultra-fast open models',
+		defaultModel: 'llama-3.3-70b-versatile',
+		baseUrl: 'https://api.groq.com/openai/v1',
+		vaultKey: 'groqApiKey',
+		serverFlag: 'llm_groq'
+	},
+	{
+		id: 'custom',
+		backend: 'openai',
+		label: 'Custom (OpenAI-compatible)',
+		hint: 'LM Studio, vLLM, any endpoint',
+		defaultModel: '',
+		baseUrl: ''
 	}
 ];
+
+const GATEWAY_BY_ID: Record<LLMGatewayId, LLMProviderPreset> =
+	Object.fromEntries(LLM_PROVIDERS.map((p) => [p.id, p])) as Record<
+		LLMGatewayId,
+		LLMProviderPreset
+	>;
+
+/**
+ * Resolve the active connector preset from the pipeline model config.
+ * The explicit `gateway` choice wins; state without one (legacy/hand
+ * edited) is inferred from the backend provider + effective base URL.
+ */
+export function resolveGateway(
+	model: Pick<ModelConfig, 'provider' | 'gateway'>,
+	effectiveBaseUrl?: string
+): LLMProviderPreset {
+	if (model.gateway) {
+		const preset = GATEWAY_BY_ID[model.gateway];
+		if (preset) return preset;
+	}
+	if (model.provider === 'mock') return GATEWAY_BY_ID.mock;
+	if (model.provider === 'ollama') return GATEWAY_BY_ID.ollama;
+	const url = (effectiveBaseUrl ?? '').toLowerCase();
+	if (url.includes('openrouter')) return GATEWAY_BY_ID.openrouter;
+	if (url.includes('groq')) return GATEWAY_BY_ID.groq;
+	if (url.includes('anthropic')) return GATEWAY_BY_ID.anthropic;
+	if (url) return GATEWAY_BY_ID.custom;
+	return GATEWAY_BY_ID.openai;
+}
+
+/** Fallback model ids offered in the dropdown while live discovery is
+ * unavailable (key not set yet / endpoint unreachable). Live results
+ * always replace them once a discovery succeeds. */
+export const SUGGESTED_MODELS: Partial<Record<LLMGatewayId, string[]>> = {
+	openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
+	anthropic: [
+		'claude-sonnet-4-5',
+		'claude-opus-4-1',
+		'claude-3-5-haiku-latest'
+	],
+	openrouter: [
+		'openrouter/auto',
+		'openai/gpt-4o-mini',
+		'anthropic/claude-sonnet-4.5'
+	],
+	groq: [
+		'llama-3.3-70b-versatile',
+		'llama-3.1-8b-instant',
+		'openai/gpt-oss-120b'
+	]
+};
 
 export const TTS_PROVIDERS: {
 	id: TTSProviderId;

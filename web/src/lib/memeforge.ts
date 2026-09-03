@@ -6,7 +6,6 @@ import { apiBase, serverUrl } from '@/lib/config';
 import type {
 	GameplayClip,
 	KeywordExtractResponse,
-	ModelCatalogEntry,
 	ModelDiscoveryResult,
 	RenderJobInfo,
 	ScriptResponse,
@@ -37,11 +36,6 @@ export const MemeforgeAPI = {
 	}> {
 		// /health is mounted at the app root (container probes), not /api/v1.
 		const { data } = await axios.get(`${serverUrl}/health`);
-		return data;
-	},
-
-	async listModels(): Promise<ModelCatalogEntry[]> {
-		const { data } = await apiBase.get('/models');
 		return data;
 	},
 

@@ -1,6 +1,19 @@
 /** Shared types for the memeforge studio pipeline. */
 
 export type LLMProviderId = 'openai' | 'ollama' | 'mock';
+
+/** Frontend-only connector preset picked in the Model node dropdown.
+ * Cloud gateways (openai/anthropic/openrouter/groq) all ride the backend
+ * 'openai' provider with a preset base URL; see LLM_PROVIDERS in
+ * lib/catalog.ts. */
+export type LLMGatewayId =
+	| 'mock'
+	| 'ollama'
+	| 'openai'
+	| 'anthropic'
+	| 'openrouter'
+	| 'groq'
+	| 'custom';
 export type TTSProviderId =
 	| 'edge'
 	| 'meme_classic'
@@ -17,17 +30,13 @@ export type DurationTarget = 30 | 60 | 90;
 export type CardStyleId = 'hook' | 'quote' | 'none';
 
 export interface ModelConfig {
+	/** Backend provider id sent to the API. */
 	provider: LLMProviderId;
+	/** Chosen connector preset (frontend dropdown state, not sent). */
+	gateway?: LLMGatewayId;
 	model: string;
 	baseUrl?: string;
 	apiKey?: string;
-}
-
-export interface ModelCatalogEntry {
-	id: LLMProviderId;
-	label: string;
-	default_model: string;
-	configured: boolean;
 }
 
 export interface DiscoveredModel {
