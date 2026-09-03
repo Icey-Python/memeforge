@@ -11,7 +11,9 @@ import type {
 	RenderJobInfo,
 	ScriptResponse,
 	StockClipSelection,
+	StockCredentialParams,
 	StockSearchResponse,
+	TTSCredentialParams,
 	TTSProviderId,
 	VoiceOption
 } from '@/types/studio';
@@ -63,18 +65,23 @@ export const MemeforgeAPI = {
 		return data;
 	},
 
-	async listVoices(provider: TTSProviderId): Promise<VoiceOption[]> {
+	async listVoices(
+		provider: TTSProviderId,
+		creds?: TTSCredentialParams
+	): Promise<VoiceOption[]> {
 		const { data } = await apiBase.get('/voices', {
-			params: { provider }
+			params: { provider, ...creds }
 		});
 		return data;
 	},
 
-	async synthesizeSpeech(payload: {
-		text: string;
-		provider: string;
-		voice?: string;
-	}): Promise<{ provider: string; voice: string; audio_url: string }> {
+	async synthesizeSpeech(
+		payload: {
+			text: string;
+			provider: string;
+			voice?: string;
+		} & TTSCredentialParams
+	): Promise<{ provider: string; voice: string; audio_url: string }> {
 		const { data } = await apiBase.post('/tts', payload);
 		return data;
 	},
@@ -85,10 +92,14 @@ export const MemeforgeAPI = {
 	},
 
 	/** Search Pexels / Pixabay for vertical stock clips.
-	 * Falls back to curated demo clips when no API keys are set. */
-	async searchStock(query: string): Promise<StockSearchResponse> {
+	 * Falls back to curated demo clips when no API keys are set.
+	 * Client vault keys (creds) take priority over the server .env. */
+	async searchStock(
+		query: string,
+		creds?: StockCredentialParams
+	): Promise<StockSearchResponse> {
 		const { data } = await apiBase.get('/stock/search', {
-			params: { q: query }
+			params: { q: query, ...creds }
 		});
 		return data;
 	},
@@ -106,20 +117,22 @@ export const MemeforgeAPI = {
 		return data;
 	},
 
-	async startRender(payload: {
-		topic: string;
-		title: string;
-		script: string[];
-		tts_provider: string;
-		tts_voice?: string;
-		/** Preset gameplay loop id (when the background is a preset clip). */
-		gameplay_id?: string;
-		/** Stock clips stitched into the background (stock mode). */
-		stock_clips?: StockClipSelection[];
-		/** Top card overlay: 'hook' (headline), 'quote', or 'none'. */
-		card_style?: 'hook' | 'quote' | 'none';
-		sfx_on_punchlines: boolean;
-	}): Promise<{ job_id: string; status: string; status_url: string }> {
+	async startRender(
+		payload: {
+			topic: string;
+			title: string;
+			script: string[];
+			tts_provider: string;
+			tts_voice?: string;
+			/** Preset gameplay loop id (when the background is a preset clip). */
+			gameplay_id?: string;
+			/** Stock clips stitched into the background (stock mode). */
+			stock_clips?: StockClipSelection[];
+			/** Top card overlay: 'hook' (headline), 'quote', or 'none'. */
+			card_style?: 'hook' | 'quote' | 'none';
+			sfx_on_punchlines: boolean;
+		} & TTSCredentialParams
+	): Promise<{ job_id: string; status: string; status_url: string }> {
 		const { data } = await apiBase.post('/render', payload);
 		return data;
 	},

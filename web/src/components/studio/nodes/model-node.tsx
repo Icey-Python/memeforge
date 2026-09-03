@@ -13,7 +13,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LLM_PROVIDERS } from '@/lib/catalog';
+import { resolveLLMCredential } from '@/lib/credentials';
 import { MemeforgeAPI } from '@/lib/memeforge';
+import { useCredentialsStore } from '@/store/credentials';
 import { usePipelineStore } from '@/store/pipeline';
 import type { DiscoveredModel, LLMProviderId } from '@/types/studio';
 import { NodeBadge, NodeShell, StudioSelect } from '../node-shell';
@@ -46,14 +48,18 @@ export function ModelNode(_props: NodeProps) {
 	// Live model discovery for the selected provider + base URL. Triggered
 	// automatically when a remote provider is selected and manually via the
 	// Discover button (which also picks up base URL edits).
+	const vaultKeys = useCredentialsStore((s) => s.keys);
+	const llmCreds = () => resolveLLMCredential(model, vaultKeys);
 	const discovery = useQuery({
 		queryKey: ['model-discovery', model.provider, model.baseUrl ?? ''],
-		queryFn: () =>
-			MemeforgeAPI.discoverModels({
+		queryFn: () => {
+			const creds = llmCreds();
+			return MemeforgeAPI.discoverModels({
 				provider: model.provider,
-				baseUrl: model.baseUrl || undefined,
-				apiKey: model.apiKey || undefined
-			}),
+				baseUrl: creds.baseUrl,
+				apiKey: creds.apiKey
+			});
+		},
 		enabled: false,
 		retry: false,
 		staleTime: 30_000
@@ -222,7 +228,7 @@ export function ModelNode(_props: NodeProps) {
 				<PlugZap className="size-3" />
 				{model.provider === 'mock'
 					? 'Mock works offline — no keys needed.'
-					: 'Credentials come from the server .env when left blank.'}
+					: 'Keys apply from your vault (Settings → API Keys), this field, or the server .env — in that order.'}
 			</p>
 		</NodeShell>
 	);

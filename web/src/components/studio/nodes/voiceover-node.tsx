@@ -20,11 +20,14 @@ import {
 	TIKTOK_VOICES,
 	TTS_PROVIDERS
 } from '@/lib/catalog';
+import { ttsCredentialParams } from '@/lib/credentials';
 import { MemeforgeAPI, mediaUrl } from '@/lib/memeforge';
 import { cn } from '@/lib/utils';
+import { useCredentialsStore } from '@/store/credentials';
 import { usePipelineStore } from '@/store/pipeline';
 import type { TTSProviderId, VoiceOption } from '@/types/studio';
 import { NodeBadge, NodeShell, StudioSelect } from '../node-shell';
+import { InlineVaultSection } from '../settings-drawer';
 
 // Offline fallback catalogs per provider (used before/without the API):
 // edge + azure share the neural shortlist, tiktok / meme_classic have the
@@ -46,13 +49,26 @@ export function VoiceoverNode(_props: NodeProps) {
 	const voiceConfirmed = usePipelineStore((s) => s.voiceConfirmed);
 	const confirmVoice = usePipelineStore((s) => s.confirmVoice);
 
+	// Vault-supplied keys (ElevenLabs / Azure) take priority over the
+	// server .env for voice listing, previews, and the final render.
+	const vaultKeys = useCredentialsStore((s) => s.keys);
+	const keyRevision = useCredentialsStore((s) => s.revision);
+	const keyedFlag =
+		ttsProvider === 'elevenlabs'
+			? Boolean(vaultKeys?.elevenlabsApiKey)
+			: ttsProvider === 'azure'
+				? Boolean(vaultKeys?.azureSpeechKey)
+				: true;
+	const ttsCreds = () => ttsCredentialParams(ttsProvider, vaultKeys);
+
 	const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
 	const { data: voices } = useQuery({
-		queryKey: ['voices', ttsProvider],
-		queryFn: () => MemeforgeAPI.listVoices(ttsProvider),
+		// Refetch when the vault's key for this provider changes.
+		queryKey: ['voices', ttsProvider, keyedFlag, keyRevision],
+		queryFn: () => MemeforgeAPI.listVoices(ttsProvider, ttsCreds()),
 		retry: false,
 		staleTime: 5 * 60_000
 	});
@@ -75,7 +91,8 @@ export function VoiceoverNode(_props: NodeProps) {
 			const result = await MemeforgeAPI.synthesizeSpeech({
 				text: 'This is memeforge, baby. Let us cook.',
 				provider: ttsProvider,
-				voice
+				voice,
+				...ttsCreds()
 			});
 			setPreviewUrl(mediaUrl(result.audio_url));
 		} catch (err: any) {
@@ -113,6 +130,44 @@ export function VoiceoverNode(_props: NodeProps) {
 					}))}
 				/>
 			</div>
+
+			{/* Keyed engines: inline vault inputs for the provider's key. */}
+			{(ttsProvider === 'elevenlabs' || ttsProvider === 'azure') && (
+				<InlineVaultSection
+					title={
+						ttsProvider === 'elevenlabs'
+							? 'ElevenLabs key'
+							: 'Azure speech key + region'
+					}
+					compact
+					fields={
+						ttsProvider === 'elevenlabs'
+							? [
+									{
+										field: 'elevenlabsApiKey',
+										label: 'ElevenLabs API Key',
+										placeholder: 'xi-api key…',
+										serverFlag: 'tts_elevenlabs'
+									}
+								]
+							: [
+									{
+										field: 'azureSpeechKey',
+										label: 'Azure Speech Key',
+										placeholder: 'subscription key…',
+										serverFlag: 'tts_azure'
+									},
+									{
+										field: 'azureSpeechRegion',
+										label: 'Azure Region',
+										placeholder: 'eastus',
+										serverFlag: 'tts_azure_region',
+										plaintext: true
+									}
+								]
+					}
+				/>
+			)}
 
 			<div className="space-y-1.5">
 				<Label htmlFor="tts-voice">Voice</Label>
@@ -210,9 +265,10 @@ export function VoiceoverNode(_props: NodeProps) {
 					/>
 				) : (
 					<p className="text-xs text-muted-foreground">
-						ElevenLabs voices appear once{' '}
-						<code className="rounded bg-muted px-1">ELEVENLABS_API_KEY</code> is
-						set on the server.
+						ElevenLabs voices appear once a key is configured — set one in the
+						key vault above (Settings → API Keys) or in the server env (
+						<code className="rounded bg-muted px-1">ELEVENLABS_API_KEY</code>
+						).
 					</p>
 				)}
 			</div>
