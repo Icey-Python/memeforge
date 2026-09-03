@@ -1,6 +1,6 @@
 """Stock video provider registry."""
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from app.providers.stock.base import BaseStockProvider
 from app.providers.stock.pexels import PexelsProvider
@@ -12,9 +12,19 @@ _REGISTRY: Dict[str, type] = {
 }
 
 
-def get_stock_providers() -> List[BaseStockProvider]:
-    """Instantiate every known stock connector (keys come from settings)."""
-    return [cls() for cls in _REGISTRY.values()]
+def get_stock_providers(
+    api_keys: Optional[Dict[str, str]] = None,
+) -> List[BaseStockProvider]:
+    """Instantiate every known stock connector.
+
+    `api_keys` carries per-request overrides from the studio UI
+    (encrypted browser vault); each provider falls back to the server
+    .env key when its override is empty.
+    """
+    keys = api_keys or {}
+    return [
+        cls(api_key=keys.get(pid, "")) for pid, cls in _REGISTRY.items()
+    ]
 
 
 def list_stock_providers() -> List[dict]:

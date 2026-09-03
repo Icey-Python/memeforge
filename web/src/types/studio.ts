@@ -1,6 +1,18 @@
 /** Shared types for the memeforge studio pipeline. */
 
-export type LLMProviderId = 'openai' | 'ollama' | 'mock';
+/** Backend LLM connector ids (what the API accepts). */
+export type LLMBackendId = 'openai' | 'ollama' | 'mock';
+
+/** Studio provider presets (several map onto the backend 'openai'
+ * connector with a fixed base URL, e.g. Anthropic / Groq / OpenRouter). */
+export type LLMProviderId =
+	| 'mock'
+	| 'ollama'
+	| 'openai'
+	| 'anthropic'
+	| 'groq'
+	| 'openrouter'
+	| 'custom';
 export type TTSProviderId =
 	| 'edge'
 	| 'meme_classic'
@@ -20,6 +32,7 @@ export interface ModelConfig {
 	provider: LLMProviderId;
 	model: string;
 	baseUrl?: string;
+	/** Session-only key from the encrypted vault — never persisted. */
 	apiKey?: string;
 }
 

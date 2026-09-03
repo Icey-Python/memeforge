@@ -88,6 +88,64 @@ def test_stock_search_rejects_short_query():
     assert resp.status_code == 422
 
 
+def test_stock_search_uses_request_api_keys(monkeypatch):
+    """Query-param key overrides beat an empty server .env (studio vault)."""
+    from app.providers.stock import pexels as pexels_module
+
+    monkeypatch.setattr(settings, "PEXELS_API_KEY", "")
+    monkeypatch.setattr(settings, "PIXABAY_API_KEY", "")
+
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            return None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, params=None, headers=None):
+            captured["headers"] = headers
+            return FakeResponse(
+                {
+                    "videos": [
+                        {
+                            "id": 777,
+                            "duration": 6,
+                            "image": "https://images.pexels.com/x.jpg",
+                            "user": {"name": "Ada"},
+                            "video_files": [
+                                {
+                                    "link": "https://cdn/ui-key-clip.mp4",
+                                    "width": 1080,
+                                    "height": 1920,
+                                    "quality": "hd",
+                                }
+                            ],
+                        }
+                    ]
+                }
+            )
+
+    monkeypatch.setattr(
+        pexels_module.httpx, "AsyncClient", lambda **kwargs: FakeClient()
+    )
+
+    resp = client.get(
+        "/api/v1/stock/search",
+        params={"q": "noodles", "pexels_api_key": "ui-key"},
+    )
+    assert resp.status_code == 200
+    # The request key authenticated the live Pexels call.
+    assert captured["headers"]["Authorization"] == "ui-key"
+    body = resp.json()
+    assert not any(v["is_demo"] for v in body["videos"])
+    assert any(v["video_url"] == "https://cdn/ui-key-clip.mp4" for v in body["videos"])
+
+
 # --- Search: live provider payload normalization ------------------------------
 
 

@@ -26,6 +26,54 @@ def test_registry_includes_all_providers():
     }
 
 
+# --- Per-request credential overrides (studio encrypted key vault) ------------
+
+
+def test_elevenlabs_api_key_override_beats_env(monkeypatch):
+    """A request key configures the provider even with no server .env."""
+    from app.providers.tts.elevenlabs import ElevenLabsProvider
+
+    monkeypatch.setattr(settings, "ELEVENLABS_API_KEY", "")
+    provider = ElevenLabsProvider(api_key="sk-from-ui")
+    assert provider.is_configured() is True
+    assert provider.api_key == "sk-from-ui"
+
+    # No override at all -> falls back to the server .env value.
+    monkeypatch.setattr(settings, "ELEVENLABS_API_KEY", "sk-from-env")
+    assert ElevenLabsProvider().api_key == "sk-from-env"
+
+
+def test_azure_key_and_region_overrides_beat_env(monkeypatch):
+    from app.providers.tts.azure import AzureTTSProvider
+
+    monkeypatch.setattr(settings, "AZURE_SPEECH_KEY", "")
+    monkeypatch.setattr(settings, "AZURE_SPEECH_REGION", "")
+    provider = AzureTTSProvider(api_key="k-from-ui", region="westeurope")
+    assert provider.is_configured() is True
+    assert provider.region == "westeurope"
+    assert provider.api_key == "k-from-ui"
+
+    # Region without a key stays unconfigured.
+    assert AzureTTSProvider(region="westeurope").is_configured() is False
+
+
+def test_registry_forwards_credentials_to_keyed_providers(monkeypatch):
+    monkeypatch.setattr(settings, "ELEVENLABS_API_KEY", "")
+    monkeypatch.setattr(settings, "AZURE_SPEECH_KEY", "")
+    monkeypatch.setattr(settings, "AZURE_SPEECH_REGION", "")
+
+    eleven = get_tts_provider("elevenlabs", api_key="k1")
+    assert eleven.is_configured() is True
+
+    azure = get_tts_provider("azure", api_key="k2", region="eastus")
+    assert azure.is_configured() is True
+
+    # Free providers ignore the credential overrides entirely.
+    edge = get_tts_provider("edge", api_key="k3", region="nowhere")
+    assert edge.is_configured() is True
+    assert not hasattr(edge, "api_key")
+
+
 def test_registry_includes_tiktok():
     provider = get_tts_provider("tiktok")
     assert isinstance(provider, TikTokTTSProvider)

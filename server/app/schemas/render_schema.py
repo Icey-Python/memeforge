@@ -144,6 +144,17 @@ class TTSRequest(BaseModel):
     )
     rate: str = Field(default="+0%", description="Speech rate adjustment, e.g. '+10%'")
     pitch: str = Field(default="+0Hz", description="Pitch adjustment, e.g. '-5Hz'")
+    api_key: Optional[str] = Field(
+        default=None,
+        description=(
+            "Per-request API key override for keyed providers "
+            "(ElevenLabs, Azure) — wins over the server .env"
+        ),
+    )
+    region: Optional[str] = Field(
+        default=None,
+        description="Azure Speech region override, e.g. 'eastus'",
+    )
 
 
 class TTSResponse(BaseModel):
@@ -201,6 +212,18 @@ class RenderRequest(BaseModel):
         default="kinetic-stroke", description="Caption rendering style"
     )
     sfx_on_punchlines: bool = Field(default=True)
+    tts_api_key: Optional[str] = Field(
+        default=None,
+        description=(
+            "Per-request API key for keyed TTS providers (ElevenLabs, "
+            "Azure) — wins over the server .env so renders work without "
+            "any backend configuration"
+        ),
+    )
+    tts_region: Optional[str] = Field(
+        default=None,
+        description="Azure Speech region override, e.g. 'eastus'",
+    )
 
 
 class RenderJob(BaseModel):

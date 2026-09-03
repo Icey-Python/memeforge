@@ -3,41 +3,142 @@
 import type {
 	CardStyleId,
 	DurationTarget,
+	LLMBackendId,
 	LLMProviderId,
+	ModelConfig,
 	TTSProviderId,
 	VoiceOption
 } from '@/types/studio';
 
-export const LLM_PROVIDERS: {
+export interface LLMProviderPreset {
 	id: LLMProviderId;
+	/** Backend connector the preset maps onto. */
+	backend: LLMBackendId;
 	label: string;
 	hint: string;
 	defaultModel: string;
-	/** Pre-filled base URL (Ollama default); blank falls back to server .env. */
+	/** Fixed endpoint for cloud presets; starting value for editable ones. */
 	defaultBaseUrl: string;
-}[] = [
+	/** Cloud presets require an API key before model discovery works. */
+	requiresApiKey: boolean;
+	/** Whether the Base URL field is shown (ollama / custom only). */
+	baseUrlEditable: boolean;
+	/** Live model discovery via /models/discover (anthropic's compat
+	 * endpoint is flaky there — it uses the curated catalog instead). */
+	discoverable: boolean;
+	/** Standard catalog models — shown before discovery (or when offline). */
+	models: string[];
+}
+
+export const LLM_PROVIDERS: LLMProviderPreset[] = [
 	{
 		id: 'mock',
+		backend: 'mock',
 		label: 'Mock (offline)',
-		hint: 'Deterministic stub — no model required',
+		hint: 'Deterministic stub — no model or key needed',
 		defaultModel: 'memeforge-stub',
-		defaultBaseUrl: ''
-	},
-	{
-		id: 'openai',
-		label: 'OpenAI-compatible',
-		hint: 'OpenAI, OpenRouter, LM Studio, vLLM…',
-		defaultModel: 'gpt-4o-mini',
-		defaultBaseUrl: ''
+		defaultBaseUrl: '',
+		requiresApiKey: false,
+		baseUrlEditable: false,
+		discoverable: false,
+		models: ['memeforge-stub']
 	},
 	{
 		id: 'ollama',
+		backend: 'ollama',
 		label: 'Ollama (local)',
-		hint: 'Local models via your Ollama daemon',
+		hint: 'Local daemon — installed models auto-detected',
 		defaultModel: 'llama3.2',
-		defaultBaseUrl: 'http://localhost:11434'
+		defaultBaseUrl: 'http://localhost:11434',
+		requiresApiKey: false,
+		baseUrlEditable: true,
+		discoverable: true,
+		models: ['llama3.2', 'llama3.1', 'qwen2.5', 'mistral']
+	},
+	{
+		id: 'openai',
+		backend: 'openai',
+		label: 'OpenAI',
+		hint: 'GPT-4o / GPT-4.1 family',
+		defaultModel: 'gpt-4o-mini',
+		defaultBaseUrl: 'https://api.openai.com/v1',
+		requiresApiKey: true,
+		baseUrlEditable: false,
+		discoverable: true,
+		models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1']
+	},
+	{
+		id: 'anthropic',
+		backend: 'openai',
+		label: 'Anthropic',
+		hint: 'Claude models (OpenAI-compatible endpoint)',
+		defaultModel: 'claude-sonnet-4-5',
+		defaultBaseUrl: 'https://api.anthropic.com/v1',
+		requiresApiKey: true,
+		baseUrlEditable: false,
+		discoverable: false,
+		models: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-1']
+	},
+	{
+		id: 'groq',
+		backend: 'openai',
+		label: 'Groq',
+		hint: 'Llama / GPT-OSS — blazing fast',
+		defaultModel: 'llama-3.3-70b-versatile',
+		defaultBaseUrl: 'https://api.groq.com/openai/v1',
+		requiresApiKey: true,
+		baseUrlEditable: false,
+		discoverable: true,
+		models: [
+			'llama-3.3-70b-versatile',
+			'llama-3.1-8b-instant',
+			'openai/gpt-oss-120b'
+		]
+	},
+	{
+		id: 'openrouter',
+		backend: 'openai',
+		label: 'OpenRouter',
+		hint: 'One key, every provider',
+		defaultModel: 'openai/gpt-4o-mini',
+		defaultBaseUrl: 'https://openrouter.ai/api/v1',
+		requiresApiKey: true,
+		baseUrlEditable: false,
+		discoverable: true,
+		models: [
+			'openai/gpt-4o-mini',
+			'anthropic/claude-sonnet-4.5',
+			'google/gemini-2.5-flash',
+			'meta-llama/llama-3.3-70b-instruct'
+		]
+	},
+	{
+		id: 'custom',
+		backend: 'openai',
+		label: 'Custom OpenAI-compatible',
+		hint: 'LM Studio, vLLM, LiteLLM — any /v1 endpoint',
+		defaultModel: '',
+		defaultBaseUrl: '',
+		requiresApiKey: false,
+		baseUrlEditable: true,
+		discoverable: true,
+		models: []
 	}
 ];
+
+/** Backend connector id a studio preset maps onto. */
+export function backendLLMProvider(providerId: LLMProviderId): LLMBackendId {
+	return LLM_PROVIDERS.find((p) => p.id === providerId)?.backend ?? 'mock';
+}
+
+/** Effective endpoint URL for a model config (fixed cloud presets use
+ * their preset URL; ollama / custom use the user's Base URL field). */
+export function llmBaseUrl(model: ModelConfig): string {
+	const preset = LLM_PROVIDERS.find((p) => p.id === model.provider);
+	if (!preset) return '';
+	if (preset.baseUrlEditable) return model.baseUrl?.trim() ?? '';
+	return preset.defaultBaseUrl;
+}
 
 export const TTS_PROVIDERS: {
 	id: TTSProviderId;

@@ -19,6 +19,7 @@ import {
 	Clapperboard,
 	Film,
 	Gamepad2,
+	KeyRound,
 	Loader2,
 	Play,
 	Search,
@@ -30,13 +31,18 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { GAMEPLAY_FALLBACK } from '@/lib/catalog';
+import {
+	backendLLMProvider,
+	GAMEPLAY_FALLBACK,
+	llmBaseUrl
+} from '@/lib/catalog';
 import { MemeforgeAPI } from '@/lib/memeforge';
 import { estimateSpokenSeconds } from '@/lib/script-split';
 import { cn } from '@/lib/utils';
 import { usePipelineStore } from '@/store/pipeline';
 import type { GameplayClip, StockVideoResult } from '@/types/studio';
 import { NodeBadge, NodeShell } from '../node-shell';
+import { VaultKeyInput } from '../vault-key-input';
 
 type BackgroundTab = 'preset' | 'stock';
 
@@ -239,6 +245,9 @@ function StockTab() {
 	const model = usePipelineStore((s) => s.model);
 	const stockClips = usePipelineStore((s) => s.stockClips);
 	const toggleStockClip = usePipelineStore((s) => s.toggleStockClip);
+	const setStockKeys = usePipelineStore((s) => s.setStockKeys);
+	const pexelsKey = usePipelineStore((s) => s.stockPexelsKey);
+	const pixabayKey = usePipelineStore((s) => s.stockPixabayKey);
 
 	const [query, setQuery] = useState('');
 	const [results, setResults] = useState<StockVideoResult[]>([]);
@@ -257,7 +266,12 @@ function StockTab() {
 		setSearching(true);
 		setError(null);
 		try {
-			const resp = await MemeforgeAPI.searchStock(term);
+			// Vault keys ride along as overrides; without any key the
+			// backend serves curated demo clips.
+			const resp = await MemeforgeAPI.searchStock(term, {
+				pexels: pexelsKey || undefined,
+				pixabay: pixabayKey || undefined
+			});
 			setResults(resp.videos);
 			setNotice(resp.notice);
 			if (resp.videos.length === 0) {
@@ -283,9 +297,9 @@ function StockTab() {
 		try {
 			const resp = await MemeforgeAPI.extractKeywords({
 				script,
-				provider: model.provider,
+				provider: backendLLMProvider(model.provider),
 				model: model.model || undefined,
-				base_url: model.baseUrl || undefined,
+				base_url: llmBaseUrl(model) || undefined,
 				api_key: model.apiKey || undefined
 			});
 			setSuggestions(resp.queries);
@@ -316,6 +330,38 @@ function StockTab() {
 
 	return (
 		<>
+			{notice && (
+				<p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] leading-snug text-amber-300">
+					{notice}
+				</p>
+			)}
+
+			<div className="space-y-2.5 rounded-lg border border-border/60 bg-muted/20 p-2.5">
+				<p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+					<KeyRound className="size-3" />
+					Live results keys — saved encrypted in your browser, or leave blank
+					for curated demo clips.
+				</p>
+				<div className="grid gap-2.5">
+					<VaultKeyInput
+						id="pexels-key"
+						vaultKey="stock.pexels.apiKey"
+						label="Pexels API key"
+						placeholder="free key from pexels.com/api"
+						onSaved={(secret) => setStockKeys({ pexels: secret })}
+						onDeleted={() => setStockKeys({ pexels: '' })}
+					/>
+					<VaultKeyInput
+						id="pixabay-key"
+						vaultKey="stock.pixabay.apiKey"
+						label="Pixabay API key"
+						placeholder="free key from pixabay.com/api"
+						onSaved={(secret) => setStockKeys({ pixabay: secret })}
+						onDeleted={() => setStockKeys({ pixabay: '' })}
+					/>
+				</div>
+			</div>
+
 			<div className="space-y-1.5">
 				<Label htmlFor="stock-query">Search vertical stock clips</Label>
 				<div className="flex gap-1.5">

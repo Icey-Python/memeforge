@@ -8,6 +8,7 @@ Backs the studio "Video Background" node:
 """
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -31,14 +32,34 @@ stock_router = APIRouter()
 async def search_stock_videos(
     q: str = Query(..., min_length=2, max_length=100),
     per_page: int = Query(default=10, ge=1, le=20),
+    pexels_api_key: Optional[str] = Query(
+        default=None,
+        description=(
+            "Per-request Pexels key override from the studio UI — "
+            "no server .env needed"
+        ),
+    ),
+    pixabay_api_key: Optional[str] = Query(
+        default=None,
+        description=(
+            "Per-request Pixabay key override from the studio UI — "
+            "no server .env needed"
+        ),
+    ),
 ):
     """Search vertical stock clips across Pexels and Pixabay.
 
-    Providers without an API key answer with a small set of curated
-    demo clips (``is_demo``) so the flow works before keys are set; the
-    response `notice` tells the studio to surface that.
+    Providers without an API key (neither the request overrides nor the
+    server .env) answer with a small set of curated demo clips
+    (``is_demo``) so the flow works before keys are set; the response
+    `notice` tells the studio to surface that.
     """
-    providers = stock_registry.get_stock_providers()
+    providers = stock_registry.get_stock_providers(
+        api_keys={
+            "pexels": pexels_api_key or "",
+            "pixabay": pixabay_api_key or "",
+        }
+    )
     videos = []
     unkeyed = []
     for provider in providers:
@@ -62,8 +83,8 @@ async def search_stock_videos(
     if unkeyed:
         env_names = " and ".join(f"{n.upper()}_API_KEY" for n in unkeyed)
         notice = (
-            f"Showing curated demo clips — add {env_names} in server/.env "
-            "for live Pexels / Pixabay results."
+            f"Showing curated demo clips — add {env_names} (server .env "
+            "or the studio Stock tab) for live Pexels / Pixabay results."
         )
     elif any(v.is_demo for v in videos):
         notice = "Some providers fell back to demo clips after an API error."

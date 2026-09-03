@@ -24,8 +24,18 @@ _REGISTRY: Dict[str, Type[BaseTTSProvider]] = {
 }
 
 
-def get_tts_provider(name: str, voice: Optional[str] = None) -> BaseTTSProvider:
-    """Build a TTS provider instance; raises 400 for unknown providers."""
+def get_tts_provider(
+    name: str,
+    voice: Optional[str] = None,
+    api_key: Optional[str] = None,
+    region: Optional[str] = None,
+) -> BaseTTSProvider:
+    """Build a TTS provider instance; raises 400 for unknown providers.
+
+    `api_key` / `region` are per-request credential overrides coming from
+    the studio UI (encrypted browser vault) — they win over the server
+    .env for the keyed providers (ElevenLabs, Azure).
+    """
     provider_cls = _REGISTRY.get(name)
     if provider_cls is None:
         raise HTTPException(
@@ -35,12 +45,18 @@ def get_tts_provider(name: str, voice: Optional[str] = None) -> BaseTTSProvider:
                 f"Available: {', '.join(sorted(_REGISTRY))}"
             ),
         )
+    if name == "elevenlabs":
+        return ElevenLabsProvider(voice=voice, api_key=api_key)
+    if name == "azure":
+        return AzureTTSProvider(voice=voice, api_key=api_key, region=region)
     return provider_cls(voice=voice)
 
 
-async def list_tts_voices(name: str) -> List[Voice]:
+async def list_tts_voices(
+    name: str, api_key: Optional[str] = None
+) -> List[Voice]:
     """Voices for the voice picker on the frontend voiceover node."""
-    provider = get_tts_provider(name)
+    provider = get_tts_provider(name, api_key=api_key)
     if isinstance(provider, ElevenLabsProvider):
         return await provider.list_remote_voices()
     return provider.list_voices()

@@ -22,23 +22,31 @@ class AzureTTSProvider(BaseTTSProvider):
     name = "azure"
     OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3"
 
-    def __init__(self, voice: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        voice: Optional[str] = None,
+        api_key: Optional[str] = None,
+        region: Optional[str] = None,
+    ) -> None:
         super().__init__(voice or settings.DEFAULT_EDGE_VOICE)
+        # Per-request overrides (studio key fields) win over the server .env.
+        self.api_key = api_key or settings.AZURE_SPEECH_KEY
+        self.region = region or settings.AZURE_SPEECH_REGION
 
     def is_configured(self) -> bool:
-        return bool(settings.AZURE_SPEECH_KEY and settings.AZURE_SPEECH_REGION)
+        return bool(self.api_key and self.region)
 
     def _auth_token(self) -> str:
         """Azure Speech REST auth: signed JWT-like HMAC token (SCT)."""
         # Azure's documented flow for REST TTS uses an access token fetched
         # from the issueToken endpoint; use that (simpler + documented).
         url = (
-            f"https://{settings.AZURE_SPEECH_REGION}.api.cognitive.microsoft.com"
+            f"https://{self.region}.api.cognitive.microsoft.com"
             "/sts/v1.0/issueToken"
         )
         resp = httpx.post(
             url,
-            headers={"Ocp-Apim-Subscription-Key": settings.AZURE_SPEECH_KEY},
+            headers={"Ocp-Apim-Subscription-Key": self.api_key},
             timeout=10.0,
         )
         resp.raise_for_status()
@@ -61,7 +69,7 @@ class AzureTTSProvider(BaseTTSProvider):
             "</prosody></voice></speak>"
         )
         url = (
-            f"https://{settings.AZURE_SPEECH_REGION}.tts.speech.microsoft.com"
+            f"https://{self.region}.tts.speech.microsoft.com"
             f"/cognitiveservices/v1"
         )
         headers = {

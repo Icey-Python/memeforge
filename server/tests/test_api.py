@@ -336,3 +336,125 @@ def test_caption_timeline():
 
 def test_mock_provider_is_configured():
     assert MockLLMProvider().is_configured() is True
+
+
+# --- Per-request credential pass-through (plug-and-play keys) -----------------
+
+
+def test_tts_endpoint_uses_request_api_key(monkeypatch):
+    """POST /tts with an api_key override works with no server .env key."""
+    from app.providers.tts import elevenlabs as elevenlabs_module
+    from app.core import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "ELEVENLABS_API_KEY", "")
+
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+        content = b"mp3-bytes"
+
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            return None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, json=None, headers=None):
+            captured["url"] = url
+            captured["headers"] = headers
+            return FakeResponse()
+
+    monkeypatch.setattr(elevenlabs_module.httpx, "AsyncClient", FakeClient)
+
+    resp = client.post(
+        "/api/v1/tts",
+        json={
+            "text": "hello",
+            "provider": "elevenlabs",
+            "voice": "21m00Tcm4TlvDq8ikWAM",
+            "api_key": "sk-from-ui",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["audio_url"].startswith("/outputs/tts-")
+    # The request key (not the empty server .env) authenticated the call.
+    assert captured["headers"]["xi-api-key"] == "sk-from-ui"
+
+
+def test_voices_endpoint_uses_request_api_key(monkeypatch):
+    """GET /voices with api_key lists the ElevenLabs library keylessly."""
+    from app.providers.tts import elevenlabs as elevenlabs_module
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "voices": [
+                    {
+                        "voice_id": "vr-1",
+                        "name": "Rachel",
+                        "labels": {"language": "en", "gender": "female"},
+                    }
+                ]
+            }
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            return None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, headers=None):
+            assert headers["xi-api-key"] == "sk-from-ui"
+            return FakeResponse()
+
+    monkeypatch.setattr(elevenlabs_module.httpx, "AsyncClient", FakeClient)
+
+    resp = client.get(
+        "/api/v1/voices",
+        params={"provider": "elevenlabs", "api_key": "sk-from-ui"},
+    )
+    assert resp.status_code == 200
+    voices = resp.json()
+    assert voices[0]["id"] == "vr-1"
+    assert voices[0]["label"] == "Rachel"
+
+
+def test_render_request_accepts_tts_credentials():
+    """Render payloads carry the vault's TTS credentials to the job."""
+    from app.schemas.render_schema import RenderRequest
+    from app.services.rendering.renderer import build_tts_provider
+
+    request = RenderRequest(
+        script=["hello"],
+        gameplay_id="minecraft-parkour",
+        tts_provider="azure",
+        tts_api_key="k-from-ui",
+        tts_region="eastus",
+    )
+    provider = build_tts_provider(request)
+    assert provider.is_configured() is True
+    assert provider.api_key == "k-from-ui"
+    assert provider.region == "eastus"
+
+    # Defaults stay None (fall back to the server .env).
+    bare = RenderRequest(script=["hello"], gameplay_id="minecraft-parkour")
+    assert bare.tts_api_key is None
+    assert bare.tts_region is None

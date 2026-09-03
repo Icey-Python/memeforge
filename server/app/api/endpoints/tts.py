@@ -2,8 +2,9 @@
 
 import uuid
 from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from app.core import settings
@@ -14,14 +15,25 @@ tts_router = APIRouter()
 
 
 @tts_router.get("/voices")
-async def list_voices(provider: TTSProvider = TTSProvider.edge):
+async def list_voices(
+    provider: TTSProvider = TTSProvider.edge,
+    api_key: Optional[str] = Query(
+        default=None,
+        description=(
+            "Per-request API key override (ElevenLabs voice library) "
+            "coming from the studio UI"
+        ),
+    ),
+):
     """Voice catalog for the frontend voiceover node voice picker.
 
     Voices carry `tags` (e.g. "meme") so the studio can group them into
     categories like "TikTok Meme Voices" or "Popular meme neural voices".
+    An optional `api_key` lists a user's ElevenLabs voice library
+    without any server-side configuration.
     """
     try:
-        voices = await tts_registry.list_tts_voices(provider.value)
+        voices = await tts_registry.list_tts_voices(provider.value, api_key=api_key)
     except Exception as exc:
         raise HTTPException(502, detail=f"Voice listing failed: {exc}") from exc
     return [
@@ -38,9 +50,16 @@ async def list_voices(provider: TTSProvider = TTSProvider.edge):
 
 @tts_router.post("/tts", response_model=TTSResponse)
 async def synthesize_speech(request: TTSRequest):
-    """Synthesize speech; returns a URL to the generated audio file."""
+    """Synthesize speech; returns a URL to the generated audio file.
+
+    `api_key` / `region` overrides (from the studio's encrypted key
+    vault) let keyed providers work without any server .env setup.
+    """
     provider = tts_registry.get_tts_provider(
-        request.provider.value, voice=request.voice
+        request.provider.value,
+        voice=request.voice,
+        api_key=request.api_key,
+        region=request.region,
     )
     if not provider.is_configured():
         raise HTTPException(

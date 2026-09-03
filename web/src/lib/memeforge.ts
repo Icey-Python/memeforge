@@ -63,9 +63,12 @@ export const MemeforgeAPI = {
 		return data;
 	},
 
-	async listVoices(provider: TTSProviderId): Promise<VoiceOption[]> {
+	async listVoices(
+		provider: TTSProviderId,
+		apiKey?: string
+	): Promise<VoiceOption[]> {
 		const { data } = await apiBase.get('/voices', {
-			params: { provider }
+			params: { provider, ...(apiKey ? { api_key: apiKey } : {}) }
 		});
 		return data;
 	},
@@ -74,6 +77,10 @@ export const MemeforgeAPI = {
 		text: string;
 		provider: string;
 		voice?: string;
+		/** Vault-hydrated key override (ElevenLabs / Azure). */
+		api_key?: string;
+		/** Azure region override, e.g. 'eastus'. */
+		region?: string;
 	}): Promise<{ provider: string; voice: string; audio_url: string }> {
 		const { data } = await apiBase.post('/tts', payload);
 		return data;
@@ -85,10 +92,19 @@ export const MemeforgeAPI = {
 	},
 
 	/** Search Pexels / Pixabay for vertical stock clips.
-	 * Falls back to curated demo clips when no API keys are set. */
-	async searchStock(query: string): Promise<StockSearchResponse> {
+	 * Vault-hydrated keys ride along as overrides so users never touch
+	 * the server .env; without any key the backend serves curated demo
+	 * clips. */
+	async searchStock(
+		query: string,
+		keys?: { pexels?: string; pixabay?: string }
+	): Promise<StockSearchResponse> {
 		const { data } = await apiBase.get('/stock/search', {
-			params: { q: query }
+			params: {
+				q: query,
+				...(keys?.pexels ? { pexels_api_key: keys.pexels } : {}),
+				...(keys?.pixabay ? { pixabay_api_key: keys.pixabay } : {})
+			}
 		});
 		return data;
 	},
@@ -119,6 +135,9 @@ export const MemeforgeAPI = {
 		/** Top card overlay: 'hook' (headline), 'quote', or 'none'. */
 		card_style?: 'hook' | 'quote' | 'none';
 		sfx_on_punchlines: boolean;
+		/** Vault-hydrated TTS credentials (ElevenLabs / Azure). */
+		tts_api_key?: string;
+		tts_region?: string;
 	}): Promise<{ job_id: string; status: string; status_url: string }> {
 		const { data } = await apiBase.post('/render', payload);
 		return data;

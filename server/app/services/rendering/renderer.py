@@ -66,6 +66,23 @@ def _find_sfx() -> Optional[Path]:
     return None
 
 
+def build_tts_provider(request: RenderRequest):
+    """TTS connector for a render, honoring per-request credentials.
+
+    `tts_api_key` / `tts_region` (from the studio's encrypted key vault)
+    win over the server .env, so keyed providers (ElevenLabs, Azure)
+    render without any backend configuration.
+    """
+    from app.providers.tts import registry as tts_registry
+
+    return tts_registry.get_tts_provider(
+        request.tts_provider.value,
+        voice=request.tts_voice,
+        api_key=request.tts_api_key,
+        region=request.tts_region,
+    )
+
+
 def _card_title(request: RenderRequest) -> str:
     """Headline for the top card: explicit title → topic → first line."""
     if request.title:
@@ -114,11 +131,7 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
         # the segments are concatenated with zero dead space, so captions
         # and voiceover share timestamps end-to-end.
         store.update(job_id, progress=0.15, message="Synthesizing voiceover")
-        from app.providers.tts import registry as tts_registry
-
-        provider = tts_registry.get_tts_provider(
-            request.tts_provider.value, voice=request.tts_voice
-        )
+        provider = build_tts_provider(request)
 
         line_durations: List[float] = []
         line_word_timings: List[Optional[List[WordTiming]]] = []

@@ -6,6 +6,8 @@
 // and the render job lifecycle.
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { backendLLMProvider, llmBaseUrl } from '@/lib/catalog';
 import { MemeforgeAPI } from '@/lib/memeforge';
 import { deriveScriptTitle, splitScriptText } from '@/lib/script-split';
 import type {
@@ -33,12 +35,21 @@ interface PipelineStore {
 	customScriptText: string;
 	ttsProvider: TTSProviderId;
 	ttsVoice: string;
+	/** API key for the selected keyed TTS provider (ElevenLabs / Azure) —
+	 * hydrated from the encrypted vault, never persisted. */
+	ttsApiKey: string;
+	/** Azure Speech region (e.g. 'eastus') — not secret, persisted. */
+	azureRegion: string;
 	/** Preset gameplay loop id (background mode "preset"). */
 	gameplayId: string;
 	/** Which background tab is active / what the render will use. */
 	backgroundMode: BackgroundMode;
-	/** Stock clips picked for the background (mode "stock"), in order. */
+	/** Ordered background clip picks (mode "stock"), in order. */
 	stockClips: StockClipSelection[];
+	/** Stock provider keys (Pexels / Pixabay) — hydrated from the
+	 * encrypted vault, never persisted. */
+	stockPexelsKey: string;
+	stockPixabayKey: string;
 	sfxEnabled: boolean;
 	/** Top card overlay style for the render. */
 	cardStyle: CardStyleId;
@@ -72,6 +83,16 @@ interface PipelineStore {
 	applyCustomScript: () => void;
 	setTtsProvider: (provider: TTSProviderId) => void;
 	setTtsVoice: (voice: string) => void;
+	setTtsApiKey: (key: string) => void;
+	setAzureRegion: (region: string) => void;
+	setStockKeys: (keys: { pexels?: string; pixabay?: string }) => void;
+	/** Vault hydration entry point: patch every credential field at once. */
+	setCredentials: (creds: {
+		llmApiKey: string;
+		ttsApiKey: string;
+		stockPexelsKey: string;
+		stockPixabayKey: string;
+	}) => void;
 	/** Select a preset gameplay clip (background mode "preset"). */
 	setGameplay: (id: string) => void;
 	/** Switch between the preset loop + stock video background tabs. */
@@ -141,155 +162,224 @@ export function studioStage(s: {
 	return 1;
 }
 
-export const usePipelineStore = create<PipelineStore>((set, get) => ({
-	topic: '',
-	tone: 'casual-commenter',
-	durationTarget: 60,
-	model: {
-		provider: 'mock',
-		model: 'memeforge-stub'
-	},
-	scriptMode: 'generated',
-	scriptTitle: '',
-	scriptLines: [],
-	customScriptText: '',
-	ttsProvider: 'edge',
-	ttsVoice: VOICE_DEFAULTS.edge,
-	gameplayId: 'minecraft-parkour',
-	backgroundMode: 'preset',
-	stockClips: [],
-	sfxEnabled: true,
-	cardStyle: 'hook',
+export const usePipelineStore = create<PipelineStore>()(
+	persist(
+		(set, get) => ({
+			topic: '',
+			tone: 'casual-commenter',
+			durationTarget: 60,
+			model: {
+				provider: 'mock',
+				model: 'memeforge-stub'
+			},
+			scriptMode: 'generated',
+			scriptTitle: '',
+			scriptLines: [],
+			customScriptText: '',
+			ttsProvider: 'edge',
+			ttsVoice: VOICE_DEFAULTS.edge,
+			ttsApiKey: '',
+			azureRegion: '',
+			gameplayId: 'minecraft-parkour',
+			backgroundMode: 'preset',
+			stockClips: [],
+			stockPexelsKey: '',
+			stockPixabayKey: '',
+			sfxEnabled: true,
+			cardStyle: 'hook',
 
-	stepwise: true,
-	scriptConfirmed: false,
-	voiceConfirmed: false,
-	backgroundChosen: false,
+			stepwise: true,
+			scriptConfirmed: false,
+			voiceConfirmed: false,
+			backgroundChosen: false,
 
-	generating: false,
-	generatingError: null,
-	renderJob: null,
-	rendering: false,
+			generating: false,
+			generatingError: null,
+			renderJob: null,
+			rendering: false,
 
-	setTopic: (topic) => set({ topic }),
-	setTone: (tone) => set({ tone }),
-	setDurationTarget: (durationTarget) => set({ durationTarget }),
-	setModel: (patch) => set((s) => ({ model: { ...s.model, ...patch } })),
-	setScriptMode: (scriptMode) => set({ scriptMode }),
-	setScriptLines: (lines) => set({ scriptLines: lines }),
-	setScriptTitle: (scriptTitle) => set({ scriptTitle }),
-	setCustomScriptText: (customScriptText) => set({ customScriptText }),
-	applyCustomScript: () => {
-		const lines = splitScriptText(get().customScriptText);
-		if (lines.length === 0) {
-			set({ generatingError: 'Paste or write some script text first.' });
-			return;
-		}
-		// A custom script needs no LLM round-trip: splitting it directly
-		// unlocks the voiceover step (lines stay editable).
-		set({
-			scriptTitle: deriveScriptTitle(lines),
-			scriptLines: lines,
-			scriptConfirmed: true,
-			generatingError: null
-		});
-	},
-	setTtsProvider: (provider) =>
-		set({ ttsProvider: provider, ttsVoice: VOICE_DEFAULTS[provider] }),
-	setTtsVoice: (ttsVoice) => set({ ttsVoice }),
-	setGameplay: (gameplayId) => set({ gameplayId, backgroundMode: 'preset' }),
-	setBackgroundMode: (backgroundMode) => set({ backgroundMode }),
-	toggleStockClip: (clip) =>
-		set((s) => {
-			const picked = s.stockClips.some((c) => c.url === clip.url);
-			return {
-				backgroundMode: 'stock',
-				stockClips: picked
-					? s.stockClips.filter((c) => c.url !== clip.url)
-					: [...s.stockClips, clip]
-			};
-		}),
-	setCardStyle: (cardStyle) => set({ cardStyle }),
-	toggleSfx: () => set((s) => ({ sfxEnabled: !s.sfxEnabled })),
-	setStepwise: (stepwise) => set({ stepwise }),
-	confirmScript: () => set({ scriptConfirmed: true }),
-	confirmVoice: () => set({ voiceConfirmed: true }),
-	confirmBackground: () => set({ backgroundChosen: true }),
-
-	generateScript: async () => {
-		const { topic, tone, model, durationTarget } = get();
-		if (!topic.trim()) {
-			set({ generatingError: 'Enter a topic first.' });
-			return;
-		}
-		set({ generating: true, generatingError: null });
-		try {
-			const script = await MemeforgeAPI.generateScript({
-				topic,
-				provider: model.provider,
-				model: model.model || undefined,
-				base_url: model.baseUrl || undefined,
-				api_key: model.apiKey || undefined,
-				tone,
-				duration_target: durationTarget
-			});
-			set({
-				generating: false,
-				scriptTitle: script.title,
-				scriptLines: script.lines.map((l) => l.text)
-			});
-		} catch (err: any) {
-			set({
-				generating: false,
-				generatingError:
-					err?.response?.data?.detail ?? 'Script generation failed.'
-			});
-		}
-	},
-
-	startRender: async () => {
-		const s = get();
-		if (s.rendering) return;
-		set({ rendering: true, renderJob: null });
-		const useStock = s.backgroundMode === 'stock' && s.stockClips.length > 0;
-		try {
-			const accepted = await MemeforgeAPI.startRender({
-				topic: s.topic,
-				title: s.scriptTitle || s.topic,
-				script: s.scriptLines.filter((l) => l.trim().length > 0),
-				tts_provider: s.ttsProvider,
-				tts_voice: s.ttsVoice,
-				// Background: stitched stock clips (stock mode) or the preset
-				// gameplay loop — the backend requires exactly one of them.
-				gameplay_id: useStock ? undefined : s.gameplayId,
-				stock_clips: useStock ? s.stockClips : undefined,
-				card_style: s.cardStyle,
-				sfx_on_punchlines: s.sfxEnabled
-			});
-			set({
-				renderJob: {
-					id: accepted.job_id,
-					status: 'queued',
-					progress: 0
+			setTopic: (topic) => set({ topic }),
+			setTone: (tone) => set({ tone }),
+			setDurationTarget: (durationTarget) => set({ durationTarget }),
+			setModel: (patch) => set((s) => ({ model: { ...s.model, ...patch } })),
+			setScriptMode: (scriptMode) => set({ scriptMode }),
+			setScriptLines: (lines) => set({ scriptLines: lines }),
+			setScriptTitle: (scriptTitle) => set({ scriptTitle }),
+			setCustomScriptText: (customScriptText) => set({ customScriptText }),
+			applyCustomScript: () => {
+				const lines = splitScriptText(get().customScriptText);
+				if (lines.length === 0) {
+					set({ generatingError: 'Paste or write some script text first.' });
+					return;
 				}
-			});
-		} catch (err: any) {
-			set({ rendering: false });
-			throw new Error(err?.response?.data?.detail ?? 'Failed to queue render.');
-		}
-	},
+				// A custom script needs no LLM round-trip: splitting it directly
+				// unlocks the voiceover step (lines stay editable).
+				set({
+					scriptTitle: deriveScriptTitle(lines),
+					scriptLines: lines,
+					scriptConfirmed: true,
+					generatingError: null
+				});
+			},
+			setTtsProvider: (provider) =>
+				set({ ttsProvider: provider, ttsVoice: VOICE_DEFAULTS[provider] }),
+			setTtsVoice: (ttsVoice) => set({ ttsVoice }),
+			setTtsApiKey: (ttsApiKey) => set({ ttsApiKey }),
+			setAzureRegion: (azureRegion) => set({ azureRegion }),
+			setStockKeys: (keys) =>
+				set((s) => ({
+					stockPexelsKey: keys.pexels ?? s.stockPexelsKey,
+					stockPixabayKey: keys.pixabay ?? s.stockPixabayKey
+				})),
+			setCredentials: (creds) =>
+				set((s) => ({
+					model: { ...s.model, apiKey: creds.llmApiKey || undefined },
+					ttsApiKey: creds.ttsApiKey,
+					stockPexelsKey: creds.stockPexelsKey,
+					stockPixabayKey: creds.stockPixabayKey
+				})),
+			setGameplay: (gameplayId) =>
+				set({ gameplayId, backgroundMode: 'preset' }),
+			setBackgroundMode: (backgroundMode) => set({ backgroundMode }),
+			toggleStockClip: (clip) =>
+				set((s) => {
+					const picked = s.stockClips.some((c) => c.url === clip.url);
+					return {
+						backgroundMode: 'stock',
+						stockClips: picked
+							? s.stockClips.filter((c) => c.url !== clip.url)
+							: [...s.stockClips, clip]
+					};
+				}),
+			setCardStyle: (cardStyle) => set({ cardStyle }),
+			toggleSfx: () => set((s) => ({ sfxEnabled: !s.sfxEnabled })),
+			setStepwise: (stepwise) => set({ stepwise }),
+			confirmScript: () => set({ scriptConfirmed: true }),
+			confirmVoice: () => set({ voiceConfirmed: true }),
+			confirmBackground: () => set({ backgroundChosen: true }),
 
-	pollRenderJob: async (jobId) => {
-		try {
-			const job = await MemeforgeAPI.getRenderJob(jobId);
-			set({ renderJob: job });
-			if (job.status === 'completed' || job.status === 'failed') {
-				set({ rendering: false });
-			}
-		} catch {
-			// transient network hiccup — keep polling
-		}
-	},
+			generateScript: async () => {
+				const { topic, tone, model, durationTarget } = get();
+				if (!topic.trim()) {
+					set({ generatingError: 'Enter a topic first.' });
+					return;
+				}
+				set({ generating: true, generatingError: null });
+				try {
+					const script = await MemeforgeAPI.generateScript({
+						topic,
+						provider: backendLLMProvider(model.provider),
+						model: model.model || undefined,
+						base_url: llmBaseUrl(model) || undefined,
+						api_key: model.apiKey || undefined,
+						tone,
+						duration_target: durationTarget
+					});
+					set({
+						generating: false,
+						scriptTitle: script.title,
+						scriptLines: script.lines.map((l) => l.text)
+					});
+				} catch (err: any) {
+					set({
+						generating: false,
+						generatingError:
+							err?.response?.data?.detail ?? 'Script generation failed.'
+					});
+				}
+			},
 
-	resetRender: () => set({ renderJob: null, rendering: false })
-}));
+			startRender: async () => {
+				const s = get();
+				if (s.rendering) return;
+				set({ rendering: true, renderJob: null });
+				const useStock =
+					s.backgroundMode === 'stock' && s.stockClips.length > 0;
+				try {
+					const accepted = await MemeforgeAPI.startRender({
+						topic: s.topic,
+						title: s.scriptTitle || s.topic,
+						script: s.scriptLines.filter((l) => l.trim().length > 0),
+						tts_provider: s.ttsProvider,
+						tts_voice: s.ttsVoice,
+						// Vault-hydrated TTS credentials ride along so keyed
+						// providers (ElevenLabs / Azure) render without server .env.
+						tts_api_key: s.ttsApiKey || undefined,
+						tts_region:
+							s.ttsProvider === 'azure'
+								? s.azureRegion || undefined
+								: undefined,
+						// Background: stitched stock clips (stock mode) or the preset
+						// gameplay loop — the backend requires exactly one of them.
+						gameplay_id: useStock ? undefined : s.gameplayId,
+						stock_clips: useStock ? s.stockClips : undefined,
+						card_style: s.cardStyle,
+						sfx_on_punchlines: s.sfxEnabled
+					});
+					set({
+						renderJob: {
+							id: accepted.job_id,
+							status: 'queued',
+							progress: 0
+						}
+					});
+				} catch (err: any) {
+					set({ rendering: false });
+					throw new Error(
+						err?.response?.data?.detail ?? 'Failed to queue render.'
+					);
+				}
+			},
+
+			pollRenderJob: async (jobId) => {
+				try {
+					const job = await MemeforgeAPI.getRenderJob(jobId);
+					set({ renderJob: job });
+					if (job.status === 'completed' || job.status === 'failed') {
+						set({ rendering: false });
+					}
+				} catch {
+					// transient network hiccup — keep polling
+				}
+			},
+
+			resetRender: () => set({ renderJob: null, rendering: false })
+		}),
+		{
+			name: 'memeforge.pipeline.v1',
+			version: 1,
+			// /studio prerenders statically: rehydrate after mount (not
+			// during React hydration) to avoid server/client mismatches.
+			skipHydration: true,
+			// Persist the wizard's choices so a reload keeps the flow —
+			// but NEVER secrets: API keys live only in the encrypted vault
+			// (see store/vault.ts) and transient lifecycle state is skipped.
+			partialize: (state) => ({
+				topic: state.topic,
+				tone: state.tone,
+				durationTarget: state.durationTarget,
+				model: {
+					provider: state.model.provider,
+					model: state.model.model,
+					baseUrl: state.model.baseUrl
+				},
+				scriptMode: state.scriptMode,
+				scriptTitle: state.scriptTitle,
+				scriptLines: state.scriptLines,
+				customScriptText: state.customScriptText,
+				ttsProvider: state.ttsProvider,
+				ttsVoice: state.ttsVoice,
+				azureRegion: state.azureRegion,
+				gameplayId: state.gameplayId,
+				backgroundMode: state.backgroundMode,
+				stockClips: state.stockClips,
+				cardStyle: state.cardStyle,
+				sfxEnabled: state.sfxEnabled,
+				stepwise: state.stepwise,
+				scriptConfirmed: state.scriptConfirmed,
+				voiceConfirmed: state.voiceConfirmed,
+				backgroundChosen: state.backgroundChosen
+			})
+		}
+	)
+);

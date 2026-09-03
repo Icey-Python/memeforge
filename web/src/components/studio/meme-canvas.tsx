@@ -246,6 +246,12 @@ function Canvas() {
 		? edges.filter((e) => isNodeVisible(e.source) && isNodeVisible(e.target))
 		: edges;
 
+	// Post-mount rehydration of the persisted wizard state
+	// (skipHydration avoids SSR mismatch on the prerendered page).
+	useEffect(() => {
+		void usePipelineStore.persist.rehydrate();
+	}, []);
+
 	// Smooth camera transition whenever the reveal set grows (or the mode
 	// toggles). Waits a beat so freshly mounted nodes get measured, then
 	// fits a two-column window: the newly unlocked nodes plus the previous

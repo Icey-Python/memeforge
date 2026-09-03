@@ -17,11 +17,15 @@ class ElevenLabsProvider(BaseTTSProvider):
     name = "elevenlabs"
     API_BASE = "https://api.elevenlabs.io/v1"
 
-    def __init__(self, voice: Optional[str] = None) -> None:
+    def __init__(
+        self, voice: Optional[str] = None, api_key: Optional[str] = None
+    ) -> None:
         super().__init__(voice or settings.ELEVENLABS_DEFAULT_VOICE)
+        # Per-request override (studio key field) wins over the server .env.
+        self.api_key = api_key or settings.ELEVENLABS_API_KEY
 
     def is_configured(self) -> bool:
-        return bool(settings.ELEVENLABS_API_KEY)
+        return bool(self.api_key)
 
     async def synthesize(
         self, text: str, rate: str = "+0%", pitch: str = "+0Hz"
@@ -35,7 +39,7 @@ class ElevenLabsProvider(BaseTTSProvider):
             "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
         }
         headers = {
-            "xi-api-key": settings.ELEVENLABS_API_KEY,
+            "xi-api-key": self.api_key,
             "Content-Type": "application/json",
             "Accept": "audio/mpeg",
         }
@@ -56,7 +60,7 @@ class ElevenLabsProvider(BaseTTSProvider):
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(
                 f"{self.API_BASE}/voices",
-                headers={"xi-api-key": settings.ELEVENLABS_API_KEY},
+                headers={"xi-api-key": self.api_key},
             )
             resp.raise_for_status()
             data = resp.json()
