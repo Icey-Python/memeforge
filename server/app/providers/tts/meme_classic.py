@@ -2,10 +2,10 @@
 
 Drives ttsmp3.com's free ``makemp3_new.php`` API, which fronts the
 classic AWS Polly voice cast behind every Twitch-chat TTS bot and
-"Reddit story" video ever made:
+countless viral TTS videos:
 
-- ``Brian``   — British English male. THE meme TTS voice (Twitch/Reddit).
-- ``Justin``  — US child/teen. The Reddit kid-story narrator.
+- ``Brian``   — British English male. THE meme TTS voice.
+- ``Justin``  — US child/teen. The classic kid-story narrator.
 - ``Matthew`` — US male, deep and serious. Meme documentary narrator.
 - ``Kendra`` / ``Salli`` / ``Joey`` / ``Ivy`` / ``Joanna`` — the rest of
   the classic cast (news anchors, calm narrators, kid voices).

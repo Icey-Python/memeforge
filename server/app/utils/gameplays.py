@@ -16,7 +16,7 @@ _CATALOG: List[GameplayClip] = [
         id="minecraft-parkour",
         label="Minecraft Parkour",
         game="Minecraft",
-        description="Classic endless parkour jump loop — the meme meta standard.",
+        description="Classic endless parkour jump loop — the shorts meta standard.",
     ),
     GameplayClip(
         id="subway-surfers",

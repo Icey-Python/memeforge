@@ -10,6 +10,12 @@ export type TTSProviderId =
 	| 'elevenlabs';
 export type RenderJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
+/** Target spoken length presets for script generation (seconds). */
+export type DurationTarget = 30 | 60 | 90;
+
+/** Top card overlay style for the rendered video. */
+export type CardStyleId = 'hook' | 'quote' | 'none';
+
 export interface ModelConfig {
 	provider: LLMProviderId;
 	model: string;

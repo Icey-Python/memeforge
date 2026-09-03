@@ -25,7 +25,7 @@ OUTPUT_DIR = Path(os.getenv("MEMEFORGE_OUTPUT_DIR", BASE_DIR / "outputs"))
 
 APP_TITLE = "Memeforge API"
 APP_DESCRIPTION = (
-    "Reddit-style gaming meme video generator: LLM script generation, "
+    "AI-powered short-form video generator: LLM script generation, "
     "TTS voiceover, and full-screen vertical video rendering."
 )
 APP_VERSION = "0.1.0"
@@ -82,8 +82,8 @@ ELEVENLABS_DEFAULT_VOICE = os.getenv(
 
 # --- Rendering ------------------------------------------------------------
 
-# Vertical short format: full-screen gameplay background with a floating
-# Reddit post card overlay and center kinetic captions.
+# Vertical short format: full-screen background loop with an optional
+# headline/quote card overlay and center kinetic captions.
 VIDEO_WIDTH = int(os.getenv("MEMEFORGE_VIDEO_WIDTH", "1080"))
 VIDEO_HEIGHT = int(os.getenv("MEMEFORGE_VIDEO_HEIGHT", "1920"))
 VIDEO_FPS = int(os.getenv("MEMEFORGE_VIDEO_FPS", "30"))

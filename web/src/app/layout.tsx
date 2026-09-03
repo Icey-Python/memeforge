@@ -20,16 +20,17 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
 	title: {
-		default: 'Memeforge — meme video studio',
+		default: 'Memeforge — short-form video studio',
 		template: '%s | Memeforge'
 	},
 	description:
-		'AI-powered Reddit-style gaming meme video generator: script via LLM connectors, free TikTok meme + neural voices, and vertical 1080x1920 full-screen renders.',
+		'AI vertical video generator: scripts via LLM connectors, free TikTok meme + neural voices, and vertical 1080x1920 full-screen renders.',
 	keywords: [
-		'memes',
 		'video generator',
-		'reddit videos',
-		'short-form',
+		'short-form video',
+		'shorts',
+		'tiktok',
+		'reels',
 		'AI',
 		'gaming'
 	]

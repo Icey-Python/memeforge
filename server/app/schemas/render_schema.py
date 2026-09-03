@@ -34,11 +34,19 @@ class JobStatus(str, Enum):
     failed = "failed"
 
 
+class CardStyle(str, Enum):
+    """Top card overlay style for the rendered video."""
+
+    hook = "hook"  # bold hook headline card
+    quote = "quote"  # quote card with decorative quote marks
+    none = "none"  # clean full video without card
+
+
 # --- Script generation ----------------------------------------------------
 
 
 class ScriptGenerateRequest(BaseModel):
-    topic: str = Field(..., description="Meme topic, e.g. 'elden ring boss fights'")
+    topic: str = Field(..., description="Video topic, e.g. 'elden ring boss fights'")
     provider: LLMProvider = Field(
         default=LLMProvider.mock, description="LLM connector to use"
     )
@@ -57,9 +65,28 @@ class ScriptGenerateRequest(BaseModel):
         description="API key override (OpenAI-compatible endpoints)",
     )
     tone: str = Field(
-        default="reddit-commenter", description="Voice/tone of the script"
+        default="casual-commenter", description="Voice/tone of the script"
     )
-    max_lines: int = Field(default=8, ge=1, le=40)
+    duration_target: int = Field(
+        default=60,
+        ge=10,
+        le=300,
+        description=(
+            "Target spoken length in seconds (30/60/90 are the studio "
+            "presets). Drives the word-count target: ~2.2-2.5 words/sec "
+            "of speech, so 60s ≈ 130-150 words — the sweet spot for "
+            "YouTube Shorts, TikTok, and Reels"
+        ),
+    )
+    max_lines: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=40,
+        description=(
+            "Line cap; defaults to a duration-derived pacing (~4s of "
+            "speech per line) when omitted"
+        ),
+    )
 
 
 class ScriptLine(BaseModel):
@@ -131,11 +158,21 @@ class TTSResponse(BaseModel):
 
 class RenderRequest(BaseModel):
     topic: str = ""
-    title: str = Field(default="", description="Headline for the Reddit-style card")
+    title: str = Field(
+        default="",
+        description="Headline for the top card (hook/quote styles only)",
+    )
     script: List[str] = Field(..., min_length=1)
     tts_provider: TTSProvider = Field(default=TTSProvider.edge)
     tts_voice: Optional[str] = None
-    gameplay_id: str = Field(..., description="Gameplay loop id from /api/v1/render/gameplays")
+    gameplay_id: str = Field(..., description="Background loop id from /api/v1/render/gameplays")
+    card_style: CardStyle = Field(
+        default=CardStyle.hook,
+        description=(
+            "Top card overlay: 'hook' (bold headline), 'quote' (quote "
+            "card), or 'none' (clean full video without card)"
+        ),
+    )
     caption_style: str = Field(
         default="kinetic-stroke", description="Caption rendering style"
     )

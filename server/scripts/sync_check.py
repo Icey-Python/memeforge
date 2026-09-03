@@ -86,8 +86,8 @@ async def main() -> None:
         "-f", "lavfi", "-i", "testsrc2=s=720x1280:r=30",
         "-t", "3", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(gameplay),
     ])
-    card = compositor.build_reddit_post_card(
-        "Sync check", workdir / "card.png", handle="r/gaming"
+    card = compositor.build_headline_card(
+        "Sync check", workdir / "card.png", style="hook"
     )
     pngs = compositor.render_caption_pngs(frames, workdir)
     cmd = compositor.compose_video(

@@ -1,12 +1,15 @@
-"""Compositor unit tests: full-screen layout, floating card, caption PNGs.
+"""Compositor unit tests: full-screen layout, floating card, caption PNGs,
+random background seek.
 
 Regression guard: the render pipeline must not depend on ffmpeg's optional
 `drawtext` filter (absent from Homebrew builds). Captions are Pillow PNGs
-burned in via `overlay`. The gameplay loop must fill the whole 1080x1920
-frame (no vstack / 50-50 split), with the Reddit post card floating
-upper-center and captions centered in the middle of the frame.
+burned in via `overlay`. The background loop must fill the whole 1080x1920
+frame (no vstack / 50-50 split), with the headline card floating
+upper-center and captions centered in the middle of the frame. Long
+background assets get a random `-ss` in-point before the input loop.
 """
 
+import random
 from pathlib import Path
 
 import pytest
@@ -18,11 +21,14 @@ from app.services.rendering.captions import build_caption_timeline
 from app.services.rendering.compositor import (
     CARD_TOP_FRACTION,
     CARD_WIDTH,
+    SEEK_MARGIN_S,
     VIDEO_TAIL_S,
-    build_reddit_post_card,
+    build_headline_card,
     compose_video,
+    compute_background_seek,
     concat_audio_args,
     duration_from_probe,
+    final_cut_duration,
     render_caption_pngs,
 )
 
@@ -169,37 +175,129 @@ def test_compose_video_without_captions_or_card(tmp_path: Path):
     )
 
 
-def test_build_reddit_post_card(tmp_path: Path):
-    out = build_reddit_post_card(
-        "You are NOT ready for this Elden Ring take, gamers",
+def test_build_headline_card(tmp_path: Path):
+    out = build_headline_card(
+        "You are NOT ready for this Elden Ring take",
         tmp_path / "card.png",
-        handle="r/gaming",
-        upvotes=45_200,
-        comments=891,
-        shares=3_400,
-        awards=3,
+        style="hook",
     )
 
     assert out.exists() and out.stat().st_size > 2_000
     with Image.open(out) as im:
-        assert im.mode == "RGBA"  # transparent corners → floats over gameplay
+        assert im.mode == "RGBA"  # transparent corners → floats over background
         assert im.width == CARD_WIDTH
-        assert im.height > 200
+        assert im.height > 100
         # Rounded corner: top-left pixel transparent.
         assert im.getpixel((2, 2))[3] == 0
-        # Card body: near-opaque white in the middle of the header row.
-        assert im.getpixel((CARD_WIDTH // 2, 10))[3] > 200
+        # Card body: near-opaque white in the middle of the first text row.
+        assert im.getpixel((CARD_WIDTH // 2, 60))[3] > 200
 
 
-def test_build_reddit_post_card_wraps_long_titles(tmp_path: Path):
-    short = build_reddit_post_card("Short one", tmp_path / "short.png")
-    long = build_reddit_post_card(
+def test_build_headline_card_wraps_long_titles(tmp_path: Path):
+    short = build_headline_card("Short one", tmp_path / "short.png")
+    long = build_headline_card(
         "This is an extremely long post title that absolutely has to wrap "
         "across multiple lines inside the floating card",
         tmp_path / "long.png",
     )
     with Image.open(short) as s, Image.open(long) as l:
         assert l.height > s.height  # wrapped title grows the card
+
+
+def test_build_headline_card_quote_style(tmp_path: Path):
+    hook = build_headline_card(
+        "quote me on this", tmp_path / "hook.png", style="hook"
+    )
+    quote = build_headline_card(
+        "quote me on this", tmp_path / "quote.png", style="quote"
+    )
+
+    assert quote.exists() and quote.stat().st_size > 2_000
+    with Image.open(hook) as h, Image.open(quote) as q:
+        assert q.mode == "RGBA"
+        assert q.width == CARD_WIDTH
+        # The oversized quote mark adds height on top of the text block.
+        assert q.height > h.height
+
+
+def test_build_headline_card_rejects_unknown_style(tmp_path: Path):
+    with pytest.raises(ValueError, match="card style"):
+        build_headline_card("nope", tmp_path / "bad.png", style="nope")
+
+
+# --- Random seek in-point for long background assets ------------------------
+
+
+def test_compute_background_seek_long_clip():
+    """A 5-120min asset gets a random in-point that leaves headroom."""
+    rng = random.Random(0)
+    # 600s b-roll, 60s requested: seek ∈ [0, 600-60-1].
+    for _ in range(50):
+        seek = compute_background_seek(600.0, 60.0, rng=rng)
+        assert seek is not None
+        assert 0.0 <= seek <= 600.0 - 60.0 - 1.0
+        assert seek < 600.0 - 60.0  # never eats into the tail headroom
+
+
+def test_compute_background_seek_short_clip_is_none():
+    """Tight clips/loops play from the top; only long assets seek."""
+    # Exactly at the margin boundary: 65 <= 60 + 5 → no seek.
+    assert compute_background_seek(65.0, 60.0) is None
+    # A 10s loop for a 60s video: loops from the top.
+    assert compute_background_seek(10.0, 60.0) is None
+    # Degenerate durations.
+    assert compute_background_seek(0.0, 60.0) is None
+    assert compute_background_seek(600.0, 0.0) is None
+
+
+def test_compute_background_seek_is_deterministic_with_seed():
+    a = compute_background_seek(600.0, 60.0, rng=random.Random(42))
+    b = compute_background_seek(600.0, 60.0, rng=random.Random(42))
+    assert a == b
+    assert a is not None and a > 0.0
+
+
+def test_compute_background_seek_uses_default_rng():
+    """Without an injected rng the global random module is used."""
+    seek = compute_background_seek(600.0, 60.0)
+    assert seek is not None
+    assert 0.0 <= seek <= 600.0 - 60.0 - 1.0
+
+
+def test_compose_video_random_seek_before_input_loop(tmp_path: Path):
+    """-ss lands before -stream_loop -i so the background starts at the
+    random in-point (fresh footage per render)."""
+    frames, argv = _compose(tmp_path, background_seek=123.456)
+
+    assert "-ss" in argv
+    ss = argv.index("-ss")
+    loop = argv.index("-stream_loop")
+    gameplay_at = argv.index(str(Path("gameplay.mp4")))
+    assert ss < loop < gameplay_at  # input option order: -ss … -stream_loop … -i
+    assert argv[ss + 1] == "123.456"
+
+
+def test_compose_video_no_seek_by_default(tmp_path: Path):
+    """Tight clips and unprobed assets render from the top: no -ss."""
+    _, argv = _compose(tmp_path)
+    assert "-ss" not in argv
+
+
+def test_final_cut_duration():
+    frames = _frames()
+    # Probed audio drives the cut: audio + tight tail.
+    assert final_cut_duration(frames, 6.5) == pytest.approx(6.5 + VIDEO_TAIL_S)
+    # No probe: the caption end drives the cut.
+    expected = frames[-1].end + VIDEO_TAIL_S
+    assert final_cut_duration(frames, None) == pytest.approx(expected)
+    # Empty captions without a probe still produce a renderable cut
+    # (the original 3.0s fallback).
+    assert final_cut_duration([], None) == pytest.approx(3.0 + VIDEO_TAIL_S)
+
+
+def test_compose_video_background_seek_with_margin_rule():
+    """The renderer only seeks when the clip outlasts the cut by > 5s."""
+    assert SEEK_MARGIN_S == 5.0
 
 
 # --- Audio/caption synchronization -------------------------------------------

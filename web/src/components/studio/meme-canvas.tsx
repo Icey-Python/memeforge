@@ -1,12 +1,14 @@
 'use client';
 
-// The meme generation canvas: React Flow graph of pipeline nodes.
+// The short-form video studio canvas: React Flow graph of pipeline
+// nodes.
 //
 // Stepwise mode (default ON) turns the canvas into a wizard: only the
 // Model + Topic nodes are shown initially; the Script node appears when
-// a script is generated, Voiceover + Gameplay unlock once the script is
-// confirmed, and the Preview & Export node appears when a gameplay clip
-// has been picked. "Show all" reveals the full freeform canvas.
+// a script is generated or pasted, Voiceover + Gameplay unlock once the
+// script is confirmed, and the Preview & Export node appears when a
+// background clip has been picked. "Show all" reveals the full freeform
+// canvas.
 
 import {
 	addEdge,
