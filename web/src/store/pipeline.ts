@@ -6,8 +6,10 @@
 // and the render job lifecycle.
 
 import { create } from 'zustand';
+import { resolveLLMCredential, ttsCredentialParams } from '@/lib/credentials';
 import { MemeforgeAPI } from '@/lib/memeforge';
 import { deriveScriptTitle, splitScriptText } from '@/lib/script-split';
+import { useCredentialsStore } from '@/store/credentials';
 import type {
 	CardStyleId,
 	DurationTarget,
@@ -224,12 +226,18 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 		}
 		set({ generating: true, generatingError: null });
 		try {
+			// Vault LLM credentials apply when the model node leaves the
+			// key/URL blank (see lib/credentials.ts resolution order).
+			const creds = resolveLLMCredential(
+				model,
+				useCredentialsStore.getState().keys
+			);
 			const script = await MemeforgeAPI.generateScript({
 				topic,
 				provider: model.provider,
 				model: model.model || undefined,
-				base_url: model.baseUrl || undefined,
-				api_key: model.apiKey || undefined,
+				base_url: creds.baseUrl,
+				api_key: creds.apiKey,
 				tone,
 				duration_target: durationTarget
 			});
@@ -253,6 +261,12 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 		set({ rendering: true, renderJob: null });
 		const useStock = s.backgroundMode === 'stock' && s.stockClips.length > 0;
 		try {
+			// Pass TTS keys from the vault so the render job synthesizes with
+			// the creator's own ElevenLabs/Azure credentials.
+			const ttsCreds = ttsCredentialParams(
+				s.ttsProvider,
+				useCredentialsStore.getState().keys
+			);
 			const accepted = await MemeforgeAPI.startRender({
 				topic: s.topic,
 				title: s.scriptTitle || s.topic,
@@ -264,7 +278,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 				gameplay_id: useStock ? undefined : s.gameplayId,
 				stock_clips: useStock ? s.stockClips : undefined,
 				card_style: s.cardStyle,
-				sfx_on_punchlines: s.sfxEnabled
+				sfx_on_punchlines: s.sfxEnabled,
+				...ttsCreds
 			});
 			set({
 				renderJob: {

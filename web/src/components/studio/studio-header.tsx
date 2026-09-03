@@ -4,11 +4,20 @@
 // health, nav.
 
 import { useQuery } from '@tanstack/react-query';
-import { Flame, Footprints, Home, LayoutGrid, Loader2 } from 'lucide-react';
+import {
+	Flame,
+	Footprints,
+	Home,
+	KeyRound,
+	LayoutGrid,
+	Loader2
+} from 'lucide-react';
 import Link from 'next/link';
+import { ApiKeysSheet } from '@/components/studio/settings-drawer';
 import { Button } from '@/components/ui/button';
 import { MemeforgeAPI } from '@/lib/memeforge';
 import { cn } from '@/lib/utils';
+import { useCredentialsStore } from '@/store/credentials';
 import { STUDIO_STEPS, studioStage, usePipelineStore } from '@/store/pipeline';
 
 export function StudioHeader() {
@@ -24,6 +33,9 @@ export function StudioHeader() {
 	const stepwise = usePipelineStore((s) => s.stepwise);
 	const setStepwise = usePipelineStore((s) => s.setStepwise);
 	const stage = usePipelineStore((s) => studioStage(s));
+
+	const vaultStatus = useCredentialsStore((s) => s.status);
+	const openSettings = useCredentialsStore((s) => s.openSettings);
 
 	const modeButton = (active: boolean) =>
 		cn(
@@ -94,6 +106,31 @@ export function StudioHeader() {
 					</button>
 				</div>
 
+				{/* Settings / API Keys vault */}
+				<Button
+					variant="outline"
+					size="sm"
+					className="gap-1.5"
+					onClick={openSettings}
+					data-testid="api-keys-button"
+					title="Manage API keys in the encrypted local vault"
+				>
+					<KeyRound className="size-3.5" />
+					<span className="hidden sm:inline">API Keys</span>
+					{vaultStatus !== 'uninitialized' && (
+						<span
+							role="status"
+							className={cn(
+								'size-2 rounded-full',
+								vaultStatus === 'unlocked' ? 'bg-emerald-400' : 'bg-amber-400'
+							)}
+							aria-label={
+								vaultStatus === 'unlocked' ? 'Vault unlocked' : 'Vault locked'
+							}
+						/>
+					)}
+				</Button>
+
 				{isLoading ? (
 					<Loader2 className="size-3.5 animate-spin text-muted-foreground" />
 				) : (
@@ -123,6 +160,7 @@ export function StudioHeader() {
 					</Link>
 				</Button>
 			</div>
+			<ApiKeysSheet />
 		</header>
 	);
 }

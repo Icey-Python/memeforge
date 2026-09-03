@@ -42,6 +42,14 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
+# Optional server-side defaults for named OpenAI-compatible gateways.
+# When a request supplies a base_url on one of these hosts but no api_key,
+# the matching key below is used instead of OPENAI_API_KEY. (The studio's
+# encrypted key vault sends per-request keys that always take priority.)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+
 # Local Ollama endpoint
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")

@@ -117,7 +117,13 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
         from app.providers.tts import registry as tts_registry
 
         provider = tts_registry.get_tts_provider(
-            request.tts_provider.value, voice=request.tts_voice
+            request.tts_provider.value,
+            voice=request.tts_voice,
+            # Client-supplied credentials (studio key vault) take priority
+            # over the server .env defaults.
+            elevenlabs_api_key=request.elevenlabs_api_key,
+            azure_speech_key=request.azure_speech_key,
+            azure_speech_region=request.azure_speech_region,
         )
 
         line_durations: List[float] = []

@@ -31,12 +31,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { GAMEPLAY_FALLBACK } from '@/lib/catalog';
+import { resolveLLMCredential, stockCredentialParams } from '@/lib/credentials';
 import { MemeforgeAPI } from '@/lib/memeforge';
 import { estimateSpokenSeconds } from '@/lib/script-split';
 import { cn } from '@/lib/utils';
+import { useCredentialsStore } from '@/store/credentials';
 import { usePipelineStore } from '@/store/pipeline';
 import type { GameplayClip, StockVideoResult } from '@/types/studio';
 import { NodeBadge, NodeShell } from '../node-shell';
+import { InlineVaultSection } from '../settings-drawer';
 
 type BackgroundTab = 'preset' | 'stock';
 
@@ -240,6 +243,12 @@ function StockTab() {
 	const stockClips = usePipelineStore((s) => s.stockClips);
 	const toggleStockClip = usePipelineStore((s) => s.toggleStockClip);
 
+	// Vault keys take priority over the server .env for both the stock
+	// search and the LLM keyword suggestion.
+	const vaultKeys = useCredentialsStore((s) => s.keys);
+	const llmCreds = () => resolveLLMCredential(model, vaultKeys);
+	const stockCreds = () => stockCredentialParams(vaultKeys);
+
 	const [query, setQuery] = useState('');
 	const [results, setResults] = useState<StockVideoResult[]>([]);
 	const [notice, setNotice] = useState<string | null>(null);
@@ -257,7 +266,7 @@ function StockTab() {
 		setSearching(true);
 		setError(null);
 		try {
-			const resp = await MemeforgeAPI.searchStock(term);
+			const resp = await MemeforgeAPI.searchStock(term, stockCreds());
 			setResults(resp.videos);
 			setNotice(resp.notice);
 			if (resp.videos.length === 0) {
@@ -281,12 +290,13 @@ function StockTab() {
 		setSuggesting(true);
 		setError(null);
 		try {
+			const creds = llmCreds();
 			const resp = await MemeforgeAPI.extractKeywords({
 				script,
 				provider: model.provider,
 				model: model.model || undefined,
-				base_url: model.baseUrl || undefined,
-				api_key: model.apiKey || undefined
+				base_url: creds.baseUrl,
+				api_key: creds.apiKey
 			});
 			setSuggestions(resp.queries);
 		} catch (err: any) {
@@ -316,6 +326,26 @@ function StockTab() {
 
 	return (
 		<>
+			{/* Pexels / Pixabay keys: vault > server .env > curated demo clips. */}
+			<InlineVaultSection
+				title="Stock API keys"
+				compact
+				fields={[
+					{
+						field: 'pexelsApiKey',
+						label: 'Pexels API Key',
+						placeholder: 'free key from pexels.com/api',
+						serverFlag: 'stock_pexels'
+					},
+					{
+						field: 'pixabayApiKey',
+						label: 'Pixabay API Key',
+						placeholder: 'free key from pixabay.com/api',
+						serverFlag: 'stock_pixabay'
+					}
+				]}
+			/>
+
 			<div className="space-y-1.5">
 				<Label htmlFor="stock-query">Search vertical stock clips</Label>
 				<div className="flex gap-1.5">

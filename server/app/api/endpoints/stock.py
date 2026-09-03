@@ -8,8 +8,9 @@ Backs the studio "Video Background" node:
 """
 
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 
 from app.providers.llm import registry as llm_registry
 from app.providers.stock import registry as stock_registry
@@ -31,14 +32,28 @@ stock_router = APIRouter()
 async def search_stock_videos(
     q: str = Query(..., min_length=2, max_length=100),
     per_page: int = Query(default=10, ge=1, le=20),
+    pexels_api_key: Optional[str] = Query(
+        default=None, description="Pexels API key override (studio key vault)"
+    ),
+    pixabay_api_key: Optional[str] = Query(
+        default=None, description="Pixabay API key override (studio key vault)"
+    ),
+    x_pexels_key: Optional[str] = Header(default=None, alias="X-Pexels-Key"),
+    x_pixabay_key: Optional[str] = Header(default=None, alias="X-Pixabay-Key"),
 ):
     """Search vertical stock clips across Pexels and Pixabay.
 
-    Providers without an API key answer with a small set of curated
-    demo clips (``is_demo``) so the flow works before keys are set; the
-    response `notice` tells the studio to surface that.
+    Client-supplied keys (headers or query params, from the studio's
+    encrypted key vault) take priority over the server .env — providers
+    without any key answer with a small set of curated demo clips
+    (``is_demo``) so the flow works before keys are set; the response
+    `notice` tells the studio to surface that.
     """
-    providers = stock_registry.get_stock_providers()
+    pexels_key = x_pexels_key or pexels_api_key or None
+    pixabay_key = x_pixabay_key or pixabay_api_key or None
+    providers = stock_registry.get_stock_providers(
+        pexels_api_key=pexels_key, pixabay_api_key=pixabay_key
+    )
     videos = []
     unkeyed = []
     for provider in providers:
@@ -63,7 +78,7 @@ async def search_stock_videos(
         env_names = " and ".join(f"{n.upper()}_API_KEY" for n in unkeyed)
         notice = (
             f"Showing curated demo clips — add {env_names} in server/.env "
-            "for live Pexels / Pixabay results."
+            "or the studio key vault (Settings → API Keys) for live results."
         )
     elif any(v.is_demo for v in videos):
         notice = "Some providers fell back to demo clips after an API error."
@@ -72,7 +87,10 @@ async def search_stock_videos(
         query=q,
         videos=videos,
         providers=[
-            StockProviderInfo(**p) for p in stock_registry.list_stock_providers()
+            StockProviderInfo(**p)
+            for p in stock_registry.list_stock_providers(
+                pexels_api_key=pexels_key, pixabay_api_key=pixabay_key
+            )
         ],
         notice=notice,
     )

@@ -132,3 +132,43 @@ export interface KeywordExtractResponse {
 	queries: string[];
 	source: 'llm' | 'heuristic';
 }
+
+// --- Encrypted API-key vault (Settings → API Keys) --------------------------
+
+/** Lifecycle of the local encrypted key vault. */
+export type VaultStatus = 'uninitialized' | 'locked' | 'unlocked';
+
+/**
+ * Every credential the studio vault can hold. Values live in memory only
+ * while the vault is unlocked; localStorage keeps just the AES-GCM
+ * ciphertext (see lib/vault-crypto.ts).
+ */
+export interface ApiKeys {
+	// LLM
+	openaiApiKey: string;
+	anthropicApiKey: string;
+	openrouterApiKey: string;
+	groqApiKey: string;
+	/** Custom OpenAI-compatible base URL (OpenRouter, Groq, LM Studio...). */
+	llmBaseUrl: string;
+	// TTS
+	elevenlabsApiKey: string;
+	azureSpeechKey: string;
+	azureSpeechRegion: string;
+	// Stock video
+	pexelsApiKey: string;
+	pixabayApiKey: string;
+}
+
+/** Client TTS credentials sent with /voices, /tts and /render requests. */
+export interface TTSCredentialParams {
+	elevenlabs_api_key?: string;
+	azure_speech_key?: string;
+	azure_speech_region?: string;
+}
+
+/** Client stock credentials sent with /stock/search requests. */
+export interface StockCredentialParams {
+	pexels_api_key?: string;
+	pixabay_api_key?: string;
+}

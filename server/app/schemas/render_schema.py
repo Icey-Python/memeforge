@@ -144,6 +144,20 @@ class TTSRequest(BaseModel):
     )
     rate: str = Field(default="+0%", description="Speech rate adjustment, e.g. '+10%'")
     pitch: str = Field(default="+0Hz", description="Pitch adjustment, e.g. '-5Hz'")
+    # Client-supplied credentials (studio key vault). When set they take
+    # priority over the server .env so creators can BYO keys.
+    elevenlabs_api_key: Optional[str] = Field(
+        default=None,
+        description="ElevenLabs API key override (priority over server .env)",
+    )
+    azure_speech_key: Optional[str] = Field(
+        default=None,
+        description="Azure Speech key override (priority over server .env)",
+    )
+    azure_speech_region: Optional[str] = Field(
+        default=None,
+        description="Azure Speech region override, e.g. 'eastus'",
+    )
 
 
 class TTSResponse(BaseModel):
@@ -201,6 +215,20 @@ class RenderRequest(BaseModel):
         default="kinetic-stroke", description="Caption rendering style"
     )
     sfx_on_punchlines: bool = Field(default=True)
+    # Client-supplied TTS credentials (studio key vault); passed through to
+    # the TTS provider and prioritized over the server .env.
+    elevenlabs_api_key: Optional[str] = Field(
+        default=None,
+        description="ElevenLabs API key override (priority over server .env)",
+    )
+    azure_speech_key: Optional[str] = Field(
+        default=None,
+        description="Azure Speech key override (priority over server .env)",
+    )
+    azure_speech_region: Optional[str] = Field(
+        default=None,
+        description="Azure Speech region override, e.g. 'eastus'",
+    )
 
 
 class RenderJob(BaseModel):
