@@ -49,19 +49,19 @@ async def search_stock_videos(
     """Search vertical stock clips across Pexels and Pixabay.
 
     Client-supplied keys (headers or query params, from the studio's
-    encrypted key vault) take priority over the server .env — providers
-    without any key answer with a small set of curated demo clips
-    (``is_demo``) so the flow works before keys are set; the response
-    `notice` tells the studio to surface that.
+    encrypted key vault) take priority over the server .env. Live keys
+    win outright: unkeyed providers only join the search when *nothing*
+    is keyed (curated demo mode), so a valid key never mixes demo clips
+    into the results or triggers the demo notice.
     """
     pexels_key = x_pexels_key or pexels_api_key or None
     pixabay_key = x_pixabay_key or pixabay_api_key or None
     providers = stock_registry.get_stock_providers(
         pexels_api_key=pexels_key, pixabay_api_key=pixabay_key
     )
+    active = [p for p in providers if p.is_configured()] or providers
     videos = []
-    unkeyed = []
-    for provider in providers:
+    for provider in active:
         if provider.is_configured():
             try:
                 videos.extend(await provider.search(q, per_page=per_page))
@@ -69,7 +69,6 @@ async def search_stock_videos(
                 logger.warning("stock search %s failed: %s", provider.name, exc)
                 videos.extend(provider.demo_clips_for(q))
         else:
-            unkeyed.append(provider.name)
             videos.extend(provider.demo_clips_for(q))
 
     if not videos:
@@ -78,15 +77,19 @@ async def search_stock_videos(
             detail="Stock search returned no clips (no providers available).",
         )
 
+    # The demo notice only appears when nothing live came back: a valid
+    # key that fetched real clips must not nag about other providers.
     notice = None
-    if unkeyed:
-        env_names = " and ".join(f"{n.upper()}_API_KEY" for n in unkeyed)
-        notice = (
-            f"Showing curated demo clips — add {env_names} in server/.env "
-            "or the studio key vault (Settings → API Keys) for live results."
-        )
-    elif any(v.is_demo for v in videos):
-        notice = "Some providers fell back to demo clips after an API error."
+    if all(v.is_demo for v in videos):
+        unkeyed = [p.name for p in active if not p.is_configured()]
+        if unkeyed:
+            env_names = " and ".join(f"{n.upper()}_API_KEY" for n in unkeyed)
+            notice = (
+                f"Showing curated demo clips. Add {env_names} in server/.env "
+                "or the studio key vault for live results."
+            )
+        else:
+            notice = "Providers fell back to demo clips after an API error."
 
     return StockSearchResponse(
         query=q,
@@ -153,12 +156,15 @@ async def auto_select_stock_montage(
 
     # Client-supplied keys (headers or body, from the studio's encrypted
     # key vault) take priority over the server .env — same contract as
-    # GET /stock/search.
+    # GET /stock/search, including "live keys win": unkeyed providers
+    # only join when nothing is keyed (curated demo mode).
     pexels_key = x_pexels_key or request.pexels_api_key or None
     pixabay_key = x_pixabay_key or request.pixabay_api_key or None
     providers = stock_registry.get_stock_providers(
         pexels_api_key=pexels_key, pixabay_api_key=pixabay_key
     )
+    keyed = [p for p in providers if p.is_configured()]
+    active = keyed or list(providers)
 
     duration_s = (
         request.duration_s
@@ -167,7 +173,7 @@ async def auto_select_stock_montage(
     )
     exclude = [(c.provider, c.id) for c in request.exclude]
     clips = await stock_select.auto_select_clips(
-        providers,
+        active,
         keywords,
         duration_s=duration_s,
         segment_s=request.segment_s,
@@ -183,13 +189,15 @@ async def auto_select_stock_montage(
             ),
         )
 
+    # Demo notice only in full demo mode (nothing keyed anywhere):
+    # a valid key that fetched live clips must not nag about the other
+    # provider's missing key.
     notice = None
-    unkeyed = [p.name for p in providers if not p.is_configured()]
-    if unkeyed:
-        env_names = " and ".join(f"{n.upper()}_API_KEY" for n in unkeyed)
+    if not keyed:
+        env_names = " and ".join(f"{p.name.upper()}_API_KEY" for p in active)
         notice = (
-            f"Showing curated demo clips — add {env_names} in server/.env "
-            "or the studio key vault (Settings → API Keys) for live results."
+            f"Showing curated demo clips. Add {env_names} in server/.env "
+            "or the studio key vault for live results."
         )
 
     return StockAutoSelectResponse(
