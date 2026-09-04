@@ -5,20 +5,15 @@ into a vertical 1080×1920 short-form video: full-screen background
 loop, an optional hook headline or quote card, kinetic captions, free
 voiceover. Built for YouTube Shorts, TikTok, and Reels pacing.
 
-```
-┌───────────────────────────────┐
-│  ╭─────────────────────╮      │  ← optional top card: bold hook
-│  │  BOLD HOOK TITLE     │      │    headline or quote card,
-│  ╰─────────────────────╯      │    fades out after the hook
-│                               │
-│         KINETIC               │  ← 1–2 words/frame, dead center,
-│         CAPTIONS              │    heavy stroke, punchline pop
-│                               │
-│        background loop        │  ← FULL-SCREEN 1080×1920 video
-│        (edge to edge)         │    (minecraft parkour, GTA stunts…)
-└───────────────────────────────┘
-   + Meme Classic (Brian) / edge-tts voiceover, punchline SFX 💥
-```
+
+
+https://github.com/user-attachments/assets/7e9c4c7c-b85a-4174-bae1-7a0295c6e780
+
+
+
+https://github.com/user-attachments/assets/fa564d12-830d-41b2-98e5-09c7ea44e1a6
+
+
 
 ## Monorepo layout
 
