@@ -1,16 +1,16 @@
 'use client';
 
 // Studio top bar: brand, stepwise mode toggle, step indicator, backend
-// health, nav.
+// health, vault access.
 
 import { useQuery } from '@tanstack/react-query';
 import {
 	Flame,
 	Footprints,
-	Home,
 	KeyRound,
 	LayoutGrid,
-	Loader2
+	Loader2,
+	LockOpen
 } from 'lucide-react';
 import Link from 'next/link';
 import { ApiKeysSheet } from '@/components/studio/settings-drawer';
@@ -39,51 +39,45 @@ export function StudioHeader() {
 
 	const modeButton = (active: boolean) =>
 		cn(
-			'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+			'flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all active:scale-[0.98]',
 			active
-				? 'bg-card text-foreground shadow-sm'
-				: 'text-muted-foreground hover:text-foreground'
+				? 'bg-orange-500 text-zinc-950'
+				: 'text-zinc-400 hover:text-zinc-100'
 		);
 
 	return (
-		<header className="z-10 flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-card/70 px-4 backdrop-blur">
+		<header className="z-10 flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] bg-zinc-950/80 px-4 backdrop-blur">
 			<div className="flex items-center gap-3">
 				<Link
 					href="/"
-					className="flex items-center gap-2 transition-opacity hover:opacity-80"
+					className="flex items-center gap-2.5 transition-opacity hover:opacity-80"
+					aria-label="MemeForge home"
 				>
-					<span className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-500 to-violet-600">
-						<Flame className="size-4 text-white" />
+					<span className="flex size-7 items-center justify-center rounded-lg bg-orange-500">
+						<Flame className="size-4 text-zinc-950" />
 					</span>
-					<span className="text-lg font-bold tracking-tight">
-						meme
-						<span className="bg-gradient-to-r from-fuchsia-400 to-violet-400 bg-clip-text text-transparent">
-							forge
-						</span>
+					<span className="text-[15px] font-semibold tracking-tight">
+						memeforge
 					</span>
 				</Link>
-				<span className="hidden rounded-full border border-border/60 px-2.5 py-0.5 text-xs text-muted-foreground sm:block">
-					Short-form video studio
-				</span>
 			</div>
 
 			<div className="flex items-center gap-3">
 				{/* Wizard step indicator */}
 				{stepwise && (
 					<span
-						className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex"
+						className="hidden text-xs text-zinc-500 md:flex"
 						data-testid="stepwise-indicator"
 					>
-						<span className="rounded-full bg-fuchsia-500/15 px-2 py-0.5 font-semibold text-fuchsia-300">
-							Step {stage}/5
-						</span>
+						<span className="font-medium text-zinc-200">Step {stage}/5</span>
+						<span className="mx-2 text-zinc-700">·</span>
 						{STUDIO_STEPS[stage - 1].title}
 					</span>
 				)}
 
 				{/* Canvas mode toggle */}
 				<div
-					className="flex items-center rounded-full border border-border/60 bg-muted/40 p-0.5"
+					className="flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.03] p-0.5"
 					data-testid="mode-toggle"
 				>
 					<button
@@ -115,50 +109,40 @@ export function StudioHeader() {
 					data-testid="api-keys-button"
 					title="Manage API keys in the encrypted local vault"
 				>
-					<KeyRound className="size-3.5" />
-					<span className="hidden sm:inline">API Keys</span>
-					{vaultStatus !== 'uninitialized' && (
-						<span
-							role="status"
-							className={cn(
-								'size-2 rounded-full',
-								vaultStatus === 'unlocked' ? 'bg-emerald-400' : 'bg-amber-400'
-							)}
-							aria-label={
-								vaultStatus === 'unlocked' ? 'Vault unlocked' : 'Vault locked'
-							}
-						/>
+					{vaultStatus === 'unlocked' ? (
+						<LockOpen className="size-3.5 text-orange-400" />
+					) : (
+						<KeyRound className="size-3.5" />
 					)}
+					<span className="hidden sm:inline">Keys</span>
 				</Button>
 
+				{/* Backend reachability: the one semantic status dot. */}
 				{isLoading ? (
-					<Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+					<Loader2 className="size-3.5 animate-spin text-zinc-600" />
 				) : (
 					<span
 						className={cn(
-							'flex items-center gap-1.5 text-xs',
-							online ? 'text-emerald-400' : 'text-amber-400'
+							'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium',
+							online
+								? 'bg-emerald-500/10 text-emerald-400'
+								: 'bg-amber-500/10 text-amber-400'
 						)}
 						title={
 							online
 								? 'FastAPI backend online'
-								: 'Backend offline — start it with: cd server && uvicorn app.main:app --reload'
+								: 'Backend offline, start it with: cd server && uvicorn app.main:app --reload'
 						}
 					>
 						<span
 							className={cn(
-								'size-2 rounded-full',
+								'size-1.5 rounded-full',
 								online ? 'bg-emerald-400' : 'bg-amber-400'
 							)}
 						/>
 						{online ? 'API online' : 'API offline'}
 					</span>
 				)}
-				<Button asChild variant="ghost" size="sm" className="gap-1.5">
-					<Link href="/">
-						<Home className="size-3.5" /> Home
-					</Link>
-				</Button>
 			</div>
 			<ApiKeysSheet />
 		</header>

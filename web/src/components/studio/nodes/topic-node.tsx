@@ -1,7 +1,7 @@
 'use client';
 
-// Topic / Prompt Node: what the video is about + script generation
-// trigger (with target duration pacing).
+// Topic Node: what the video is about + script generation trigger
+// (with target duration pacing).
 
 import type { NodeProps } from '@xyflow/react';
 import { Loader2, MessageSquareText, Sparkles } from 'lucide-react';
@@ -35,12 +35,9 @@ export function TopicNode(_props: NodeProps) {
 	return (
 		<NodeShell
 			icon={MessageSquareText}
-			title="Topic / Prompt"
-			accent="bg-fuchsia-500/15 text-fuchsia-300"
+			title="Topic"
 			badge={
-				<NodeBadge variant={hasScript ? 'success' : 'default'}>
-					{hasScript ? 'scripted' : 'awaiting'}
-				</NodeBadge>
+				hasScript ? <NodeBadge variant="success">scripted</NodeBadge> : null
 			}
 		>
 			<div className="space-y-1.5">
@@ -60,7 +57,7 @@ export function TopicNode(_props: NodeProps) {
 						key={idea}
 						type="button"
 						onClick={() => setTopic(idea)}
-						className="rounded-full border border-border/60 bg-muted/40 px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-fuchsia-500/40 hover:text-foreground"
+						className="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-400 transition-all hover:border-orange-500/40 hover:text-zinc-100 active:scale-[0.98]"
 					>
 						{idea}
 					</button>
@@ -81,33 +78,29 @@ export function TopicNode(_props: NodeProps) {
 			</div>
 
 			<div className="space-y-1.5">
-				<Label htmlFor="duration-select">Target duration</Label>
+				<Label htmlFor="duration-select">Duration</Label>
 				<StudioSelect
 					id="duration-select"
 					value={String(durationTarget)}
 					onChange={(v) => setDurationTarget(Number(v) as DurationTarget)}
 					options={DURATION_OPTIONS.map((d) => ({
 						value: String(d.value),
-						label: `${d.label} · ${d.hint}`
+						label: d.label
 					}))}
 				/>
-				<p className="text-[11px] text-muted-foreground">
-					Scripts pace to ~2.3 words/sec — 60s ≈ 140 words, the sweet spot for
-					Shorts, TikTok &amp; Reels.
-				</p>
 			</div>
 
 			<Button
 				onClick={() => generateScript()}
 				disabled={generating || !topic.trim()}
-				className="w-full bg-fuchsia-600 text-white hover:bg-fuchsia-500"
+				className="w-full"
 			>
 				{generating ? (
 					<Loader2 className="size-4 animate-spin" />
 				) : (
 					<Sparkles className="size-4" />
 				)}
-				{generating ? 'Thinking…' : 'Generate script'}
+				{generating ? 'Generating' : 'Generate script'}
 			</Button>
 
 			{error && (

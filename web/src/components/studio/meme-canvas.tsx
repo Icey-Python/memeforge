@@ -18,7 +18,6 @@ import {
 	Controls,
 	type Edge,
 	type EdgeTypes,
-	MiniMap,
 	type Node,
 	type NodeTypes,
 	Panel,
@@ -38,7 +37,6 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
 import { STUDIO_STEPS, studioStage, usePipelineStore } from '@/store/pipeline';
 import { GameplayNode } from './nodes/gameplay-node';
 import { ModelNode } from './nodes/model-node';
@@ -60,14 +58,13 @@ export type StudioNodeType =
 export const NODE_MENU: {
 	type: StudioNodeType;
 	label: string;
-	color: string;
 }[] = [
-	{ type: 'model', label: 'Model Connector', color: '#a78bfa' },
-	{ type: 'topic', label: 'Topic / Prompt', color: '#e879f9' },
-	{ type: 'script', label: 'Script', color: '#fb923c' },
-	{ type: 'voiceover', label: 'Voiceover / TTS', color: '#34d399' },
-	{ type: 'gameplay', label: 'Gameplay / Background', color: '#38bdf8' },
-	{ type: 'preview', label: 'Preview & Export', color: '#fb7185' }
+	{ type: 'model', label: 'Model' },
+	{ type: 'topic', label: 'Topic' },
+	{ type: 'script', label: 'Script' },
+	{ type: 'voiceover', label: 'Voiceover' },
+	{ type: 'gameplay', label: 'Background' },
+	{ type: 'preview', label: 'Preview & Export' }
 ];
 
 const nodeTypes: NodeTypes = {
@@ -274,10 +271,6 @@ function Canvas() {
 		return () => clearTimeout(timer);
 	}, [stage, stepwise, fitView, getNodes]);
 
-	const minimapNodeColor = useCallback((node: Node) => {
-		return NODE_MENU.find((n) => n.type === node.type)?.color ?? '#71717a';
-	}, []);
-
 	return (
 		<ReactFlow
 			nodes={displayedNodes}
@@ -298,17 +291,10 @@ function Canvas() {
 			<Background
 				variant={BackgroundVariant.Dots}
 				gap={26}
-				size={1.6}
-				color="#3f3f46"
+				size={1.5}
+				color="#27272a"
 			/>
-			<Controls className="!border !border-border/60 !bg-card/90 !fill-foreground-900 [&>button]:!border-border/60 [&>button]:!bg-transparent [&>button]:!fill-foreground [&>button]:!text-foreground" />
-			<MiniMap
-				nodeColor={minimapNodeColor}
-				maskColor="rgba(9,9,11,0.75)"
-				className="!border !border-border/60 !bg-card/90"
-				style={{ width: 160, height: 100 }}
-				position="bottom-right"
-			/>
+			<Controls className="!rounded-lg !border !border-white/10 !bg-zinc-900/90 [&>button]:!border-white/[0.06] [&>button]:!bg-transparent [&>button]:!fill-zinc-400 [&>button]:!text-zinc-400 hover:[&>button]:!fill-zinc-200" />
 
 			{/* Toolbar */}
 			<Panel position="top-right" className="flex gap-2">
@@ -317,7 +303,7 @@ function Canvas() {
 						<Button
 							size="sm"
 							variant="outline"
-							className="gap-1.5 border-border/60 bg-card/90 backdrop-blur"
+							className="gap-1.5 bg-zinc-900/80 backdrop-blur"
 						>
 							<Plus className="size-3.5" /> Add node
 						</Button>
@@ -329,10 +315,6 @@ function Canvas() {
 								onClick={() => addNode(item.type)}
 								className="gap-2"
 							>
-								<span
-									className="size-2 rounded-full"
-									style={{ backgroundColor: item.color }}
-								/>
 								{item.label}
 							</DropdownMenuItem>
 						))}
@@ -342,7 +324,7 @@ function Canvas() {
 					size="sm"
 					variant="outline"
 					onClick={resetLayout}
-					className={cn('gap-1.5 border-border/60 bg-card/90 backdrop-blur')}
+					className="gap-1.5 bg-zinc-900/80 backdrop-blur"
 					title="Restore the default pipeline layout"
 				>
 					<RotateCcw className="size-3.5" /> Reset
@@ -353,13 +335,11 @@ function Canvas() {
 			{stepwise && (
 				<Panel position="bottom-center">
 					<div
-						className="pointer-events-none rounded-full border border-border/60 bg-card/90 px-4 py-1.5 text-xs text-muted-foreground shadow-lg shadow-black/40 backdrop-blur"
+						className="pointer-events-none rounded-full border border-white/10 bg-zinc-900/90 px-4 py-1.5 text-xs text-zinc-500 backdrop-blur"
 						data-testid="stepwise-hint"
 					>
-						<span className="font-semibold text-foreground">
-							Step {stage} of 5
-						</span>
-						<span className="mx-1.5 text-border">·</span>
+						<span className="font-medium text-zinc-200">Step {stage} of 5</span>
+						<span className="mx-1.5 text-zinc-700">·</span>
 						{STUDIO_STEPS[stage - 1].hint}
 					</div>
 				</Panel>

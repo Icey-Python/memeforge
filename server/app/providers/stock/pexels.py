@@ -26,7 +26,7 @@ _DEMO_CLIPS: List[DemoClip] = [
     DemoClip(
         id="2499611",
         url="https://videos.pexels.com/video-files/2499611/2499611-hd_1080_1920_30fps.mp4",
-        title="Demo background — vertical b-roll",
+        title="Demo background (vertical b-roll)",
         duration_s=21.8,
         thumbnail_url="https://images.pexels.com/videos/2499611/free-video-2499611.jpg",
         tags=["city", "walk", "people", "street", "night", "background"],
@@ -34,14 +34,14 @@ _DEMO_CLIPS: List[DemoClip] = [
     DemoClip(
         id="4434242",
         url="https://videos.pexels.com/video-files/4434242/4434242-hd_1080_1920_24fps.mp4",
-        title="Demo background — vertical b-roll 2",
+        title="Demo background (vertical b-roll) 2",
         duration_s=22.1,
         tags=["nature", "abstract", "background", "texture"],
     ),
     DemoClip(
         id="4625747",
         url="https://videos.pexels.com/video-files/4625747/4625747-hd_1080_1920_24fps.mp4",
-        title="Demo background — short vertical loop",
+        title="Demo background (short vertical loop)",
         duration_s=6.5,
         tags=["abstract", "loop", "background", "short"],
     ),

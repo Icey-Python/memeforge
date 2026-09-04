@@ -12,7 +12,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import type { NodeProps } from '@xyflow/react';
-import { Bot, PlugZap, RefreshCw } from 'lucide-react';
+import { Bot, RefreshCw } from 'lucide-react';
 import { useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -131,7 +131,7 @@ export function ModelNode(_props: NodeProps) {
 	}
 
 	const placeholder = discovery.isFetching
-		? 'Loading models…'
+		? 'Loading models'
 		: !canDiscover
 			? gateway.id === 'custom'
 				? 'Enter a base URL first'
@@ -140,11 +140,11 @@ export function ModelNode(_props: NodeProps) {
 				? 'Refresh to load models'
 				: options.length === 0
 					? 'No models found'
-					: '— pick a model —';
+					: 'Pick a model';
 
 	// Header badge reflects live endpoint availability.
 	let badgeVariant: 'default' | 'success' | 'warn' | 'danger' = 'default';
-	let badgeText = '…';
+	let badgeText = 'checking';
 	if (isMock) {
 		badgeVariant = 'success';
 		badgeText = 'ready';
@@ -152,7 +152,7 @@ export function ModelNode(_props: NodeProps) {
 		badgeVariant = 'warn';
 		badgeText = gateway.id === 'custom' ? 'needs URL' : 'needs key';
 	} else if (discovery.isFetching) {
-		badgeText = '…';
+		badgeText = 'checking';
 	} else if (discovery.data) {
 		if (!discovery.data.reachable) {
 			badgeVariant = 'danger';
@@ -176,8 +176,7 @@ export function ModelNode(_props: NodeProps) {
 	return (
 		<NodeShell
 			icon={Bot}
-			title="Model Connector"
-			accent="bg-violet-500/15 text-violet-300"
+			title="Model"
 			handles="source"
 			badge={<NodeBadge variant={badgeVariant}>{badgeText}</NodeBadge>}
 		>
@@ -201,7 +200,7 @@ export function ModelNode(_props: NodeProps) {
 					}}
 					options={LLM_PROVIDERS.map((p) => ({
 						value: p.id,
-						label: `${p.label} — ${p.hint}`
+						label: p.label
 					}))}
 				/>
 			</div>
@@ -214,7 +213,7 @@ export function ModelNode(_props: NodeProps) {
 							type="button"
 							onClick={() => void discovery.refetch()}
 							disabled={!canDiscover || discovery.isFetching}
-							className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+							className="flex items-center gap-1 text-[11px] font-medium text-zinc-500 transition-colors hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
 							data-testid="refresh-models"
 						>
 							<RefreshCw
@@ -232,7 +231,7 @@ export function ModelNode(_props: NodeProps) {
 					/>
 					{discovery.isError && (
 						<p className="text-xs text-red-400" role="alert">
-							Model discovery failed — is the memeforge server running?
+							Model discovery failed. Is the memeforge server running?
 						</p>
 					)}
 					{discovery.data && !discovery.data.reachable && (
@@ -242,11 +241,11 @@ export function ModelNode(_props: NodeProps) {
 							data-testid="discovery-error"
 						>
 							{discovery.data.error ??
-								'Endpoint unreachable — check the URL / daemon.'}
+								'Endpoint unreachable. Check the URL / daemon.'}
 						</p>
 					)}
 					{discovery.data?.reachable && discovered.length === 0 && (
-						<p className="text-xs text-muted-foreground">
+						<p className="text-xs text-zinc-500">
 							No models found at this endpoint.
 						</p>
 					)}
@@ -285,15 +284,6 @@ export function ModelNode(_props: NodeProps) {
 					/>
 				</div>
 			)}
-
-			<p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-				<PlugZap className="size-3" />
-				{isMock
-					? 'Mock works offline — no keys needed.'
-					: gateway.id === 'custom'
-						? 'Vault keys never auto-send to unknown hosts — use the key field above.'
-						: 'Keys apply from your vault or the server .env — Settings → API Keys.'}
-			</p>
 		</NodeShell>
 	);
 }

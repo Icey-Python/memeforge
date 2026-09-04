@@ -59,19 +59,17 @@ function KeywordChips() {
 	return (
 		<div className="space-y-1.5" data-testid="script-keywords">
 			<div className="flex items-center justify-between">
-				<Label className="flex items-center gap-1 text-[11px] text-muted-foreground">
+				<Label className="flex items-center gap-1.5 text-[11px] text-zinc-500">
 					<Tags className="size-3" />
-					Script keywords
+					Keywords
 				</Label>
-				<span className="text-[10px] text-muted-foreground">
-					{keywords.length} · powers the stock montage
-				</span>
+				<span className="text-[10px] text-zinc-600">{keywords.length}</span>
 			</div>
 			<div className="flex flex-wrap gap-1">
 				{keywords.map((keyword, i) => (
 					<span
 						key={keyword}
-						className="group flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 py-0.5 pr-1 pl-2 text-[11px] text-orange-300"
+						className="flex items-center gap-1 rounded-full border border-orange-500/25 bg-orange-500/10 py-0.5 pr-1 pl-2.5 text-[11px] text-orange-300"
 					>
 						{keyword}
 						<button
@@ -96,9 +94,7 @@ function KeywordChips() {
 						}
 					}}
 					placeholder={
-						keywords.length
-							? 'Add a keyword…'
-							: 'e.g. city street night (used for stock b-roll search)'
+						keywords.length ? 'Add keyword' : 'e.g. city street night'
 					}
 					className="h-7 text-[11px]"
 					aria-label="Add script keyword"
@@ -120,8 +116,6 @@ function KeywordChips() {
 
 export function ScriptNode(_props: NodeProps) {
 	const topic = usePipelineStore((s) => s.topic);
-	const generating = usePipelineStore((s) => s.generating);
-	const generatingError = usePipelineStore((s) => s.generatingError);
 	const scriptMode = usePipelineStore((s) => s.scriptMode);
 	const setScriptMode = usePipelineStore((s) => s.setScriptMode);
 	const scriptTitle = usePipelineStore((s) => s.scriptTitle);
@@ -132,7 +126,7 @@ export function ScriptNode(_props: NodeProps) {
 	const applyCustomScript = usePipelineStore((s) => s.applyCustomScript);
 	const scriptConfirmed = usePipelineStore((s) => s.scriptConfirmed);
 	const confirmScript = usePipelineStore((s) => s.confirmScript);
-	const generateScript = usePipelineStore((s) => s.generateScript);
+	const generatingError = usePipelineStore((s) => s.generatingError);
 
 	const wordCount = scriptLines.reduce(
 		(total, line) =>
@@ -146,31 +140,28 @@ export function ScriptNode(_props: NodeProps) {
 
 	const tabClass = (active: boolean) =>
 		cn(
-			'flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors',
+			'flex flex-1 items-center justify-center gap-1.5 rounded-full px-2 py-1.5 text-[11px] font-medium transition-all active:scale-[0.98]',
 			active
-				? 'bg-orange-600 text-white shadow-sm'
-				: 'text-muted-foreground hover:text-foreground'
+				? 'bg-orange-500 text-zinc-950'
+				: 'text-zinc-400 hover:text-zinc-100'
 		);
 
 	return (
 		<NodeShell
 			icon={Sparkles}
 			title="Script"
-			accent="bg-orange-500/15 text-orange-300"
 			badge={
-				<NodeBadge variant={scriptConfirmed ? 'success' : 'default'}>
-					{scriptConfirmed
-						? 'confirmed'
-						: scriptLines.length
-							? `${scriptLines.length} lines`
-							: 'empty'}
-				</NodeBadge>
+				scriptLines.length > 0 ? (
+					<NodeBadge variant={scriptConfirmed ? 'success' : 'default'}>
+						{scriptConfirmed ? 'confirmed' : `${scriptLines.length} lines`}
+					</NodeBadge>
+				) : null
 			}
 		>
 			<div className="space-y-3">
 				{/* Mode tabs: LLM-generated vs pasted custom script */}
 				<div
-					className="flex gap-1 rounded-lg border border-border/60 bg-muted/40 p-0.5"
+					className="flex gap-0.5 rounded-full border border-white/10 bg-white/[0.03] p-0.5"
 					data-testid="script-mode-tabs"
 				>
 					<button
@@ -194,43 +185,24 @@ export function ScriptNode(_props: NodeProps) {
 				</div>
 
 				{scriptMode === 'generated' && scriptLines.length === 0 && (
-					<p className="text-center text-xs text-muted-foreground">
+					<p className="text-center text-xs text-zinc-500">
 						{topic.trim()
-							? 'Generate a script from your topic, or switch to Custom to paste your own.'
-							: 'Enter a topic in the Topic node first, or switch to Custom to paste your own script.'}
+							? 'Generate from your topic in the Topic node.'
+							: 'Enter a topic first, or paste a custom script.'}
 					</p>
-				)}
-
-				{scriptMode === 'generated' && (
-					<Button
-						className="w-full gap-1.5 bg-orange-600 text-white hover:bg-orange-500"
-						onClick={() => generateScript()}
-						disabled={generating || !topic.trim()}
-					>
-						<Sparkles className="size-4" />
-						{generating ? 'Generating…' : 'Generate script'}
-					</Button>
 				)}
 
 				{scriptMode === 'custom' && (
 					<div className="space-y-2">
-						<Label
-							htmlFor="custom-script-input"
-							className="text-[11px] text-muted-foreground"
-						>
-							Paste / write your script
-						</Label>
 						<Textarea
 							id="custom-script-input"
 							data-testid="custom-script-input"
 							value={customScriptText}
 							onChange={(e) => setCustomScriptText(e.target.value)}
-							placeholder={
-								'Paste your whole script here…\n\nBlank lines and sentence punctuation split it into timed lines automatically.'
-							}
+							placeholder="Paste your script here. Blank lines split it into timed lines."
 							className="min-h-[110px] resize-y text-xs"
 						/>
-						<div className="flex items-center justify-between text-[11px] text-muted-foreground">
+						<div className="flex items-center justify-between text-[11px] text-zinc-500">
 							<span>
 								{customLines.length > 0
 									? `${customLines.length} lines · ~${Math.round(
@@ -240,28 +212,24 @@ export function ScriptNode(_props: NodeProps) {
 													0
 												)
 											)
-										)}s of speech`
-									: 'No LLM call — splits by paragraphs & punctuation'}
+										)}s`
+									: 'No LLM call, instant'}
 							</span>
 						</div>
 						<Button
-							className="w-full gap-1.5 bg-orange-600 text-white hover:bg-orange-500"
+							className="w-full gap-1.5"
 							onClick={() => applyCustomScript()}
 							disabled={customLines.length === 0}
 						>
 							<CheckCircle2 className="size-4" />
 							Use this script
 						</Button>
-						<p className="text-center text-[11px] text-muted-foreground">
-							Instantly unlocks voiceover &amp; gameplay — lines stay editable
-							below.
-						</p>
 					</div>
 				)}
 
 				{generatingError && (
 					<p
-						className="rounded-md bg-red-500/10 px-2 py-1.5 text-[11px] text-red-400"
+						className="rounded-lg bg-red-500/10 px-2 py-1.5 text-[11px] text-red-400"
 						data-testid="script-error"
 					>
 						{generatingError}
@@ -274,24 +242,29 @@ export function ScriptNode(_props: NodeProps) {
 							// biome-ignore lint/suspicious/noArrayIndexKey: script lines are positional
 							<div key={i} className="flex items-center gap-1">
 								<span
-									className="w-5 shrink-0 text-center text-[10px] text-muted-foreground"
+									className={cn(
+										'w-5 shrink-0 text-center text-[10px]',
+										i === scriptLines.length - 1
+											? 'font-semibold text-orange-400'
+											: 'text-zinc-600'
+									)}
 									title={i === scriptLines.length - 1 ? 'Punchline' : undefined}
 								>
-									{i === scriptLines.length - 1 ? '💥' : i + 1}
+									{i + 1}
 								</span>
 								<Input
 									value={line}
 									onChange={(e) =>
 										setScriptLines(updateAt(scriptLines, i, e.target.value))
 									}
-									className="h-8 min-w-0 flex-1 border-border/60 bg-background/60 text-xs"
+									className="h-8 min-w-0 flex-1 text-xs"
 									aria-label={`Script line ${i + 1}`}
 								/>
 								<div className="flex shrink-0 items-center">
 									<Button
 										variant="ghost"
 										size="icon"
-										className="size-6 text-muted-foreground hover:text-foreground"
+										className="size-6 text-zinc-500 hover:text-zinc-200"
 										onClick={() => setScriptLines(moveAt(scriptLines, i, -1))}
 										disabled={i === 0}
 										aria-label={`Move line ${i + 1} up`}
@@ -301,7 +274,7 @@ export function ScriptNode(_props: NodeProps) {
 									<Button
 										variant="ghost"
 										size="icon"
-										className="size-6 text-muted-foreground hover:text-foreground"
+										className="size-6 text-zinc-500 hover:text-zinc-200"
 										onClick={() => setScriptLines(moveAt(scriptLines, i, 1))}
 										disabled={i === scriptLines.length - 1}
 										aria-label={`Move line ${i + 1} down`}
@@ -311,7 +284,7 @@ export function ScriptNode(_props: NodeProps) {
 									<Button
 										variant="ghost"
 										size="icon"
-										className="size-6 text-muted-foreground hover:text-red-400"
+										className="size-6 text-zinc-500 hover:text-red-400"
 										onClick={() =>
 											setScriptLines(
 												scriptLines.filter((_, index) => index !== i)
@@ -329,20 +302,20 @@ export function ScriptNode(_props: NodeProps) {
 						<Button
 							variant="ghost"
 							size="sm"
-							className="h-7 w-full gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+							className="h-7 w-full gap-1 text-[11px] text-zinc-500 hover:text-zinc-200"
 							onClick={() => setScriptLines([...scriptLines, ''])}
 						>
 							<Plus className="size-3" />
 							Add line
 						</Button>
 
-						{/* Visual keywords shipped with the script — editable, and the
+						{/* Visual keywords shipped with the script, editable, and the
 						 * search set for the auto-selected stock montage (Step 4). */}
 						<KeywordChips />
 
-						<div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+						<div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
 							<span className="truncate" title={scriptTitle}>
-								“{scriptTitle || 'untitled'}”
+								{scriptTitle || 'untitled'}
 							</span>
 							<span className="shrink-0">
 								{wordCount} words · ~{spokenSeconds}s
@@ -351,12 +324,12 @@ export function ScriptNode(_props: NodeProps) {
 
 						{!scriptConfirmed && (
 							<Button
-								className="w-full gap-1.5 bg-orange-600 text-white hover:bg-orange-500"
+								className="w-full gap-1.5"
 								onClick={() => confirmScript()}
 								data-testid="confirm-script-btn"
 							>
 								<ArrowRight className="size-4" />
-								Confirm script &amp; continue
+								Confirm script
 							</Button>
 						)}
 					</div>

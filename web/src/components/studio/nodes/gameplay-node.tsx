@@ -3,12 +3,12 @@
 // Video Background Node (Step 4): pick the background for the render.
 //
 // Two tabs:
-//  1. "Preset Gameplays" — the bundled loop catalog.
-//  2. "Stock Video Search" — Pexels / Pixabay vertical clips: auto-suggest
-//     visual keywords from the script (AI, heuristic offline fallback),
-//     search, hover-to-preview thumbnails, and an ordered multi-clip
-//     selection. The backend downloads + stitches the picks (with cuts)
-//     to exactly cover the voiceover duration.
+//  1. "Presets" - the bundled gameplay loop catalog.
+//  2. "Stock" - Pexels / Pixabay vertical clips: auto-suggest visual
+//     keywords from the script (AI, heuristic offline fallback), search,
+//     hover-to-preview thumbnails, and an ordered multi-clip selection.
+//     The backend downloads + stitches the picks (with cuts) to exactly
+//     cover the voiceover duration.
 //
 // Confirming the background unlocks the Preview & Export node (Step 5).
 
@@ -81,8 +81,7 @@ export function GameplayNode(_props: NodeProps) {
 	return (
 		<NodeShell
 			icon={Clapperboard}
-			title="Video Background"
-			accent="bg-sky-500/15 text-sky-300"
+			title="Background"
 			handles="both"
 			className="w-[400px]"
 			badge={
@@ -90,14 +89,12 @@ export function GameplayNode(_props: NodeProps) {
 					<NodeBadge variant="success">confirmed</NodeBadge>
 				) : canConfirm ? (
 					<NodeBadge variant="warn">pick ready</NodeBadge>
-				) : (
-					<NodeBadge>choose one</NodeBadge>
-				)
+				) : null
 			}
 		>
 			{/* Tab switcher */}
 			<div
-				className="flex rounded-lg border border-border/60 bg-muted/40 p-0.5"
+				className="flex gap-0.5 rounded-full border border-white/10 bg-white/[0.03] p-0.5"
 				role="tablist"
 				aria-label="Background source"
 			>
@@ -107,13 +104,13 @@ export function GameplayNode(_props: NodeProps) {
 					aria-selected={backgroundMode === 'preset'}
 					onClick={() => setTab('preset')}
 					className={cn(
-						'flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
+						'flex flex-1 items-center justify-center gap-1.5 rounded-full px-2 py-1.5 text-xs font-medium transition-all active:scale-[0.98]',
 						backgroundMode === 'preset'
-							? 'bg-card text-foreground shadow-sm'
-							: 'text-muted-foreground hover:text-foreground'
+							? 'bg-orange-500 text-zinc-950'
+							: 'text-zinc-400 hover:text-zinc-100'
 					)}
 				>
-					<Gamepad2 className="size-3.5" /> Preset Gameplays
+					<Gamepad2 className="size-3.5" /> Presets
 				</button>
 				<button
 					type="button"
@@ -121,13 +118,13 @@ export function GameplayNode(_props: NodeProps) {
 					aria-selected={backgroundMode === 'stock'}
 					onClick={() => setTab('stock')}
 					className={cn(
-						'flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
+						'flex flex-1 items-center justify-center gap-1.5 rounded-full px-2 py-1.5 text-xs font-medium transition-all active:scale-[0.98]',
 						backgroundMode === 'stock'
-							? 'bg-card text-foreground shadow-sm'
-							: 'text-muted-foreground hover:text-foreground'
+							? 'bg-orange-500 text-zinc-950'
+							: 'text-zinc-400 hover:text-zinc-100'
 					)}
 				>
-					<Film className="size-3.5" /> Stock Video Search
+					<Film className="size-3.5" /> Stock
 				</button>
 			</div>
 
@@ -150,21 +147,14 @@ export function GameplayNode(_props: NodeProps) {
 				aria-pressed={backgroundChosen}
 				data-testid="confirm-background"
 				className={cn(
-					'w-full font-semibold',
-					backgroundChosen
-						? 'border-sky-500/40 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20'
-						: 'bg-gradient-to-r from-sky-600 to-cyan-600 text-white hover:from-sky-500 hover:to-cyan-500'
+					'w-full',
+					backgroundChosen &&
+						'border-orange-500/30 bg-orange-500/10 text-orange-300 hover:bg-orange-500/15'
 				)}
+				variant={backgroundChosen ? 'outline' : 'default'}
 			>
-				{backgroundChosen ? (
-					<>
-						<Check className="size-4" /> Background confirmed
-					</>
-				) : (
-					<>
-						<Check className="size-4" /> Confirm Video Background ➔
-					</>
-				)}
+				<Check className="size-4" />
+				{backgroundChosen ? 'Background confirmed' : 'Confirm background'}
 			</Button>
 		</NodeShell>
 	);
@@ -187,11 +177,14 @@ function PresetTab({
 		<>
 			{isLoading ? (
 				<div className="space-y-2">
-					<div className="h-14 animate-pulse rounded-lg bg-muted/60" />
-					<div className="h-14 animate-pulse rounded-lg bg-muted/60" />
+					<div className="h-14 animate-pulse rounded-lg bg-white/[0.04]" />
+					<div className="h-14 animate-pulse rounded-lg bg-white/[0.04]" />
 				</div>
 			) : (
-				<div className="grid max-h-64 gap-2 overflow-y-auto pr-1">
+				<div
+					className="max-h-64 overflow-y-auto"
+					data-testid="preset-gameplay-list"
+				>
 					{catalog.map((clip) => {
 						const active = clip.id === selectedId;
 						return (
@@ -200,37 +193,42 @@ function PresetTab({
 								type="button"
 								onClick={() => onSelect(clip.id)}
 								className={cn(
-									'rounded-lg border p-3 text-left transition-colors',
-									active
-										? 'border-sky-500/60 bg-sky-500/10'
-										: 'border-border/60 bg-muted/20 hover:border-sky-500/30'
+									'flex w-full items-center justify-between gap-2 border-b border-white/[0.06] px-2 py-2.5 text-left transition-colors last:border-b-0',
+									active ? 'bg-orange-500/10' : 'hover:bg-white/[0.03]'
 								)}
 								aria-pressed={active}
 							>
-								<div className="flex items-center justify-between gap-2">
-									<span className="text-xs font-semibold">{clip.label}</span>
-									{clip.available ? (
-										<span className="shrink-0 text-[10px] font-medium uppercase text-emerald-400">
-											ready
+								<div className="min-w-0">
+									<div className="flex items-center gap-2">
+										<span className="text-xs font-medium text-zinc-200">
+											{clip.label}
 										</span>
-									) : (
-										<span className="shrink-0 text-[10px] font-medium uppercase text-amber-400">
-											no asset
-										</span>
-									)}
+										{clip.available ? (
+											<span className="shrink-0 text-[10px] font-medium text-emerald-400">
+												ready
+											</span>
+										) : (
+											<span className="shrink-0 text-[10px] font-medium text-zinc-600">
+												no asset
+											</span>
+										)}
+									</div>
+									<p className="mt-0.5 truncate text-[11px] text-zinc-500">
+										{clip.description}
+									</p>
 								</div>
-								<p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-									{clip.description}
-								</p>
+								{active && (
+									<Check className="size-4 shrink-0 text-orange-400" />
+								)}
 							</button>
 						);
 					})}
 				</div>
 			)}
-			<p className="text-[11px] leading-snug text-muted-foreground">
-				Drop <code className="rounded bg-muted px-1">{'<id>.mp4'}</code> loops
+			<p className="text-[11px] text-zinc-600">
+				Drop <code className="rounded bg-white/5 px-1">{'<id>.mp4'}</code> loops
 				into{' '}
-				<code className="rounded bg-muted px-1">server/assets/gameplay/</code>{' '}
+				<code className="rounded bg-white/5 px-1">server/assets/gameplay/</code>{' '}
 				to mark clips ready.
 			</p>
 		</>
@@ -264,7 +262,7 @@ function StockTab() {
 	const [suggestions, setSuggestions] = useState<string[]>([]);
 	const [error, setError] = useState<string | null>(null);
 
-	// Auto-selected montage state — the picks themselves live in the
+	// Auto-selected montage state - the picks themselves live in the
 	// pipeline store; this is just the build summary + in-flight flags.
 	const [building, setBuilding] = useState(false);
 	const [swappingAt, setSwappingAt] = useState<number | null>(null);
@@ -293,7 +291,7 @@ function StockTab() {
 			setResults(resp.videos);
 			setNotice(resp.notice);
 			if (resp.videos.length === 0) {
-				setError('No clips found — try a simpler search term.');
+				setError('No clips found. Try a simpler search term.');
 			}
 		} catch (err: any) {
 			setError(err?.response?.data?.detail ?? 'Stock search failed.');
@@ -430,23 +428,23 @@ function StockTab() {
 
 			{/* One-click fast-switching montage from the script keywords. */}
 			<div
-				className="space-y-1.5 rounded-lg border border-sky-500/30 bg-sky-500/5 p-2.5"
+				className="space-y-2 rounded-xl border border-white/10 p-3"
 				data-testid="montage-auto-build"
 			>
 				<div className="flex items-center justify-between gap-2">
 					<div className="min-w-0">
-						<p className="text-[11px] font-semibold text-sky-300">
+						<p className="text-xs font-medium text-zinc-200">
 							Auto-build montage
 						</p>
-						<p className="text-[10px] leading-snug text-muted-foreground">
+						<p className="text-[11px] text-zinc-500">
 							{scriptKeywords.length
-								? `${scriptKeywords.length} script keywords → ~2s cuts`
-								: 'Keywords from your script → ~2s cuts'}
+								? `${scriptKeywords.length} keywords, ~2s cuts`
+								: 'Keywords from your script, ~2s cuts'}
 						</p>
 					</div>
 					<Button
 						size="sm"
-						className="h-7 shrink-0 gap-1 bg-sky-600 px-2.5 text-white hover:bg-sky-500"
+						className="h-7 shrink-0 gap-1 px-3"
 						onClick={() => autoBuild()}
 						disabled={building || !canAutoBuild}
 						data-testid="auto-build-montage"
@@ -460,18 +458,16 @@ function StockTab() {
 					</Button>
 				</div>
 				{montageInfo && stockClips.length > 0 && (
-					<div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+					<div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
 						<span data-testid="montage-summary">
-							~{montageInfo.segmentsNeeded} cuts ·{' '}
-							{montageInfo.segmentS.toFixed(1)}s each · {stockClips.length}{' '}
-							unique clips
+							~{montageInfo.segmentsNeeded} cuts · {stockClips.length} clips
 						</span>
 						<button
 							type="button"
 							onClick={() => autoBuild(Date.now())}
 							disabled={building}
 							data-testid="montage-shuffle"
-							className="flex shrink-0 items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 transition-colors hover:border-sky-500/40 hover:text-sky-300"
+							className="flex shrink-0 items-center gap-1 rounded-full border border-white/10 px-2.5 py-0.5 transition-all hover:border-orange-500/40 hover:text-orange-300 active:scale-[0.98]"
 						>
 							<Dices className="size-3" />
 							Shuffle
@@ -481,7 +477,7 @@ function StockTab() {
 			</div>
 
 			<div className="space-y-1.5">
-				<Label htmlFor="stock-query">Or search vertical stock clips</Label>
+				<Label htmlFor="stock-query">Or search stock clips</Label>
 				<div className="flex gap-1.5">
 					<Input
 						id="stock-query"
@@ -540,7 +536,7 @@ function StockTab() {
 								setQuery(q);
 								search(q);
 							}}
-							className="flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-300 transition-colors hover:bg-sky-500/20"
+							className="flex items-center gap-1 rounded-full border border-orange-500/25 bg-orange-500/10 px-2.5 py-0.5 text-[11px] text-orange-300 transition-all hover:bg-orange-500/20 active:scale-[0.98]"
 						>
 							<Wand2 className="size-3" />
 							{q}
@@ -550,7 +546,7 @@ function StockTab() {
 			)}
 
 			{notice && (
-				<p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] leading-snug text-amber-300">
+				<p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1.5 text-[11px] leading-snug text-amber-300">
 					{notice}
 				</p>
 			)}
@@ -580,13 +576,13 @@ function StockTab() {
 			{/* Ordered multi-clip selection + montage mode vs coverage */}
 			{stockClips.length > 0 && (
 				<div
-					className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-2.5"
+					className="space-y-1.5 rounded-xl border border-white/10 p-3"
 					data-testid="stock-picks"
 				>
-					<div className="flex items-center justify-between gap-2 text-[11px] font-medium">
-						<span>
-							Background playlist ({stockClips.length} clip
-							{stockClips.length === 1 ? '' : 's'})
+					<div className="flex items-center justify-between gap-2 text-xs font-medium">
+						<span className="text-zinc-300">
+							Playlist · {stockClips.length} clip
+							{stockClips.length === 1 ? '' : 's'}
 						</span>
 						<button
 							type="button"
@@ -599,10 +595,10 @@ function StockTab() {
 									: 'Playlist: each clip plays in full, in order'
 							}
 							className={cn(
-								'flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 transition-colors',
+								'flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] transition-all active:scale-[0.98]',
 								stockMontage
-									? 'border-sky-500/50 bg-sky-500/15 text-sky-300'
-									: 'border-border/60 text-muted-foreground hover:text-foreground'
+									? 'border-orange-500/50 bg-orange-500/15 text-orange-300'
+									: 'border-white/10 text-zinc-400 hover:text-zinc-100'
 							)}
 						>
 							<Zap className="size-3" />
@@ -613,16 +609,16 @@ function StockTab() {
 						{stockClips.map((clip, i) => (
 							<li
 								key={clip.url}
-								className="flex items-center gap-1.5 rounded-md bg-background/60 px-2 py-1 text-[11px]"
+								className="flex items-center gap-1.5 rounded-lg bg-white/[0.03] px-2 py-1 text-[11px]"
 							>
-								<span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-[9px] font-bold text-sky-300">
+								<span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-orange-500/15 text-[9px] font-semibold text-orange-300">
 									{i + 1}
 								</span>
 								<span
-									className="min-w-0 flex-1 truncate"
+									className="min-w-0 flex-1 truncate text-zinc-300"
 									title={
 										clip.keyword
-											? `${clip.label} — keyword: ${clip.keyword}`
+											? `${clip.label} (keyword: ${clip.keyword})`
 											: clip.label
 									}
 								>
@@ -630,7 +626,7 @@ function StockTab() {
 								</span>
 								{clip.keyword && (
 									<span
-										className="max-w-24 shrink-0 truncate rounded-full bg-sky-500/10 px-1.5 text-[9px] text-sky-300"
+										className="max-w-24 shrink-0 truncate rounded-full bg-orange-500/10 px-1.5 text-[9px] text-orange-300"
 										title={`Keyword: ${clip.keyword}`}
 									>
 										{clip.keyword}
@@ -643,7 +639,7 @@ function StockTab() {
 										disabled={swappingAt === i}
 										title={`Swap this clip (searches "${clip.keyword}" for another)`}
 										aria-label={`Swap ${clip.label}`}
-										className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-sky-300"
+										className="shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:text-orange-300"
 									>
 										{swappingAt === i ? (
 											<Loader2 className="size-3 animate-spin" />
@@ -652,14 +648,14 @@ function StockTab() {
 										)}
 									</button>
 								)}
-								<span className="shrink-0 text-muted-foreground">
+								<span className="shrink-0 text-zinc-600">
 									{formatDuration(clip.duration_s)}
 								</span>
 								<button
 									type="button"
 									onClick={() => toggleStockClip(clip)}
 									aria-label={`Remove ${clip.label}`}
-									className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-red-400"
+									className="shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:text-red-400"
 								>
 									<X className="size-3" />
 								</button>
@@ -667,27 +663,21 @@ function StockTab() {
 						))}
 					</ol>
 					{stockMontage ? (
-						<p className="text-[10px] leading-snug text-muted-foreground">
-							Fast-switching montage — each clip plays ~1.5–3s before the cut,
-							cycled to cover your whole voiceover.
+						<p className="text-[11px] text-zinc-500">
+							Each clip plays ~1.5-3s before the cut, cycled over the voiceover.
 						</p>
 					) : (
 						<>
-							<div className="h-1.5 overflow-hidden rounded-full bg-muted">
+							<div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
 								<div
-									className={cn(
-										'h-full rounded-full transition-all',
-										coverage >= 1
-											? 'bg-emerald-500'
-											: 'bg-gradient-to-r from-amber-500 to-orange-500'
-									)}
+									className="h-full rounded-full bg-orange-500 transition-all"
 									style={{ width: `${Math.min(100, coverage * 100)}%` }}
 								/>
 							</div>
-							<p className="text-[10px] leading-snug text-muted-foreground">
+							<p className="text-[11px] text-zinc-500">
 								{coverage >= 1
-									? 'Full coverage — the picks cover your whole voiceover.'
-									: 'Short on coverage — clips will repeat to fill the voiceover. Pick more for variety.'}
+									? 'Picks cover the whole voiceover.'
+									: 'Short on coverage, clips will repeat. Pick more for variety.'}
 							</p>
 						</>
 					)}
@@ -715,7 +705,7 @@ function StockThumb({
 	// frame via the #t=0.1 media fragment.
 	const startPreview = () => {
 		videoRef.current?.play().catch(() => {
-			/* autoplay denied — the still thumbnail stays */
+			/* autoplay denied - the still thumbnail stays */
 		});
 	};
 	const stopPreview = () => {
@@ -737,11 +727,11 @@ function StockThumb({
 			className={cn(
 				'group relative overflow-hidden rounded-lg border text-left transition-all',
 				picked
-					? 'border-sky-500/70 ring-2 ring-sky-500/40'
-					: 'border-border/60 hover:border-sky-500/40'
+					? 'border-orange-500/70 ring-2 ring-orange-500/30'
+					: 'border-white/10 hover:border-white/25'
 			)}
 		>
-			<div className="relative aspect-[9/16] w-full bg-black/80">
+			<div className="relative aspect-[9/16] w-full bg-black">
 				{video.thumbnail_url ? (
 					// biome-ignore lint/performance/noImgElement: remote stock CDN thumbnails (Pexels/Pixabay), dynamic per search
 					<img
@@ -766,11 +756,10 @@ function StockThumb({
 					)}
 				/>
 				{/* Provider + duration badges */}
-				<span className="absolute top-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white/90">
+				<span className="absolute top-1 left-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[9px] font-medium text-white/90">
 					{video.provider}
-					{video.is_demo ? ' · demo' : ''}
 				</span>
-				<span className="absolute right-1 bottom-1 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-medium text-white/90">
+				<span className="absolute right-1 bottom-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[9px] font-medium text-white/90">
 					{formatDuration(video.duration_s)}
 				</span>
 				{/* Play affordance on hover */}
@@ -781,12 +770,12 @@ function StockThumb({
 				</span>
 				{/* Picked check */}
 				{picked && (
-					<span className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-full bg-sky-500 text-white shadow">
+					<span className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-full bg-orange-500 text-zinc-950 shadow">
 						<Check className="size-3" />
 					</span>
 				)}
 			</div>
-			<p className="truncate px-1.5 py-1 text-[10px] leading-tight text-muted-foreground">
+			<p className="truncate px-1.5 py-1 text-[10px] leading-tight text-zinc-500">
 				{video.title}
 			</p>
 		</button>

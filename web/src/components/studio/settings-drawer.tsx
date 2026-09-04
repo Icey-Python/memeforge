@@ -3,9 +3,9 @@
 // Settings / API Keys drawer: the encrypted key vault UI.
 //
 // Three states:
-//  - uninitialized → create a vault with a master passphrase
-//  - locked        → unlock with the passphrase (fresh session default)
-//  - unlocked      → manage LLM / TTS / stock keys with per-field status
+//  - uninitialized -> create a vault with a master passphrase
+//  - locked        -> unlock with the passphrase (fresh session default)
+//  - unlocked      -> manage LLM / TTS / stock keys with per-field status
 //
 // SECURITY: keys are AES-GCM-256 encrypted (PBKDF2, 310k iterations)
 // before they touch localStorage; decrypted keys live in memory only
@@ -21,7 +21,6 @@ import {
 	Loader2,
 	Lock,
 	LockOpen,
-	ShieldCheck,
 	Trash2
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -60,25 +59,25 @@ export const LLM_FIELDS: FieldDef[] = [
 	{
 		field: 'openaiApiKey',
 		label: 'OpenAI API Key',
-		placeholder: 'sk-…',
+		placeholder: 'sk-',
 		serverFlag: 'llm_openai'
 	},
 	{
 		field: 'anthropicApiKey',
 		label: 'Anthropic API Key',
-		placeholder: 'sk-ant-…',
+		placeholder: 'sk-ant-',
 		serverFlag: 'llm_anthropic'
 	},
 	{
 		field: 'openrouterApiKey',
 		label: 'OpenRouter API Key',
-		placeholder: 'sk-or-…',
+		placeholder: 'sk-or-',
 		serverFlag: 'llm_openrouter'
 	},
 	{
 		field: 'groqApiKey',
 		label: 'Groq API Key',
-		placeholder: 'gsk_…',
+		placeholder: 'gsk_',
 		serverFlag: 'llm_groq'
 	}
 ];
@@ -96,13 +95,13 @@ const TTS_FIELDS: FieldDef[] = [
 	{
 		field: 'elevenlabsApiKey',
 		label: 'ElevenLabs API Key',
-		placeholder: 'xi-api key…',
+		placeholder: 'xi-api key',
 		serverFlag: 'tts_elevenlabs'
 	},
 	{
 		field: 'azureSpeechKey',
 		label: 'Azure Speech Key',
-		placeholder: 'subscription key…',
+		placeholder: 'subscription key',
 		serverFlag: 'tts_azure'
 	},
 	{
@@ -144,21 +143,21 @@ function KeyStatusPill({
 }) {
 	if (value) {
 		return (
-			<span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-				Configured (local vault)
+			<span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] font-medium text-orange-400">
+				Vault
 			</span>
 		);
 	}
 	if (serverDefault) {
 		return (
-			<span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400">
-				Using Server Default
+			<span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+				Server default
 			</span>
 		);
 	}
 	return (
-		<span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-			{emptyLabel ?? 'Not configured'}
+		<span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-zinc-500">
+			{emptyLabel ?? 'Not set'}
 		</span>
 	);
 }
@@ -227,7 +226,7 @@ function KeyFieldInput({
 						type="button"
 						onClick={() => setReveal((r) => !r)}
 						aria-label={reveal ? 'Hide key' : 'Reveal key'}
-						className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+						className="absolute top-1/2 right-2 -translate-y-1/2 text-zinc-500 transition-colors hover:text-zinc-200"
 					>
 						{reveal ? (
 							<EyeOff className="size-3.5" />
@@ -239,10 +238,10 @@ function KeyFieldInput({
 			</div>
 			{saved && (
 				<p
-					className="flex items-center gap-1 text-[10px] text-emerald-400"
+					className="flex items-center gap-1 text-[10px] text-orange-400"
 					data-testid={`vault-saved-${def.field}`}
 				>
-					<Check className="size-3" /> Saved — encrypted to the local vault
+					<Check className="size-3" /> Saved to vault
 				</p>
 			)}
 		</div>
@@ -282,7 +281,7 @@ function PassphraseInput({
 				type="button"
 				onClick={() => setReveal((r) => !r)}
 				aria-label={reveal ? 'Hide passphrase' : 'Reveal passphrase'}
-				className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+				className="absolute top-1/2 right-2 -translate-y-1/2 text-zinc-500 transition-colors hover:text-zinc-200"
 			>
 				{reveal ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
 			</button>
@@ -313,16 +312,11 @@ function CreateVaultSection() {
 
 	return (
 		<form className="space-y-4" onSubmit={(e) => void submit(e)}>
-			<div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs leading-relaxed text-muted-foreground">
-				<p className="flex items-center gap-1.5 font-medium text-emerald-300">
-					<ShieldCheck className="size-3.5" /> Create your key vault
-				</p>
-				<p className="mt-1">
-					Keys are encrypted with AES-GCM-256 (PBKDF2, 310k iterations) before
-					they touch localStorage. Decrypted keys exist only in memory while the
-					vault is unlocked — zero plaintext keys on disk.
-				</p>
-			</div>
+			<p className="flex items-start gap-2 text-xs leading-relaxed text-zinc-500">
+				<LockOpen className="mt-0.5 size-3.5 shrink-0 text-orange-400" />
+				Keys are AES-GCM encrypted before they touch localStorage and exist in
+				memory only while the vault is unlocked.
+			</p>
 			<div className="space-y-1.5">
 				<Label htmlFor="vault-passphrase">Master passphrase</Label>
 				<PassphraseInput
@@ -370,11 +364,10 @@ function UnlockSection() {
 
 	return (
 		<form className="space-y-4" onSubmit={(e) => void submit(e)}>
-			<div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
-				<Lock className="size-4 shrink-0 text-amber-400" />
-				The vault is locked for this session. Enter your master passphrase to
-				decrypt your keys.
-			</div>
+			<p className="flex items-start gap-2 text-xs text-zinc-500">
+				<Lock className="mt-0.5 size-3.5 shrink-0 text-amber-400" />
+				The vault is locked for this session.
+			</p>
 			<div className="space-y-1.5">
 				<Label htmlFor="vault-unlock-passphrase">Master passphrase</Label>
 				<PassphraseInput
@@ -403,11 +396,11 @@ function ForgotPassphrase() {
 
 	if (!confirming) {
 		return (
-			<p className="text-center text-[11px] text-muted-foreground">
+			<p className="text-center text-[11px] text-zinc-600">
 				Forgot the passphrase?{' '}
 				<button
 					type="button"
-					className="underline transition-colors hover:text-foreground"
+					className="underline transition-colors hover:text-zinc-300"
 					onClick={() => setConfirming(true)}
 				>
 					Clear the vault and start over
@@ -416,7 +409,7 @@ function ForgotPassphrase() {
 		);
 	}
 	return (
-		<div className="rounded-lg border border-red-500/30 bg-red-500/5 p-2.5 text-[11px] text-red-300">
+		<div className="rounded-xl border border-red-500/25 bg-red-500/5 p-3 text-[11px] text-red-300">
 			<p>
 				Clearing the vault permanently deletes the encrypted blob from this
 				browser. Saved keys cannot be recovered without the passphrase.
@@ -453,10 +446,8 @@ function SectionCard({
 	children: React.ReactNode;
 }) {
 	return (
-		<section className="rounded-lg border border-border/60 bg-card/60 p-3">
-			<h3 className="mb-3 text-xs font-semibold tracking-wide uppercase">
-				{title}
-			</h3>
+		<section className="rounded-xl border border-white/[0.06] p-4">
+			<h3 className="mb-3 text-xs font-medium text-zinc-400">{title}</h3>
 			<div className="space-y-3">{children}</div>
 		</section>
 	);
@@ -473,12 +464,11 @@ function ManageKeysSection({
 	return (
 		<div className="space-y-4">
 			<div
-				className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2.5 text-xs text-emerald-300"
+				className="flex items-center gap-2 rounded-xl border border-orange-500/25 bg-orange-500/5 p-2.5 text-xs text-orange-300"
 				data-testid="vault-unlocked-banner"
 			>
 				<LockOpen className="size-4 shrink-0" />
-				Vault unlocked — keys apply to requests in this session and re-encrypt
-				on every save.
+				Vault unlocked. Keys apply to this session and re-encrypt on save.
 			</div>
 
 			<SectionCard title="LLM Keys">
@@ -499,11 +489,6 @@ function ManageKeysSection({
 					serverDefault={isSet(LLM_FIELDS[3].serverFlag)}
 				/>
 				<KeyFieldInput def={BASE_URL_FIELD} serverDefault={false} />
-				<p className="text-[10px] leading-snug text-muted-foreground">
-					The custom base URL applies when the model connector leaves its own
-					URL blank (e.g. point it at OpenRouter or Groq and the matching key is
-					used automatically).
-				</p>
 			</SectionCard>
 
 			<SectionCard title="TTS Keys">
@@ -514,10 +499,6 @@ function ManageKeysSection({
 						serverDefault={isSet(def.serverFlag)}
 					/>
 				))}
-				<p className="text-[10px] leading-snug text-muted-foreground">
-					Free engines — Edge-TTS, Meme Classic (Brian), TikTok, Google — need
-					no keys.
-				</p>
 			</SectionCard>
 
 			<SectionCard title="Stock Video Keys">
@@ -556,13 +537,13 @@ export function ApiKeysSheet() {
 	const initFromStorage = useCredentialsStore((s) => s.initFromStorage);
 	const error = useCredentialsStore((s) => s.error);
 
-	// Hydrate the vault status on mount (ciphertext presence check only —
+	// Hydrate the vault status on mount (ciphertext presence check only,
 	// no decryption happens until the user enters the passphrase).
 	useEffect(() => {
 		initFromStorage();
 	}, [initFromStorage]);
 
-	// Server-default presence drives the "Using Server Default" pills;
+	// Server-default presence drives the "Server default" pills;
 	// shares the ['health'] query with the studio header.
 	const { data: health } = useQuery({
 		queryKey: ['health'],
@@ -581,13 +562,12 @@ export function ApiKeysSheet() {
 				className="w-full overflow-y-auto p-0 sm:max-w-md"
 				data-testid="api-keys-drawer"
 			>
-				<SheetHeader className="border-b border-border/60">
+				<SheetHeader className="border-b border-white/[0.06]">
 					<SheetTitle className="flex items-center gap-2 text-base">
-						<KeyRound className="size-4" /> Settings — API Keys
+						<KeyRound className="size-4" /> API Keys
 					</SheetTitle>
 					<SheetDescription className="text-xs">
-						Encrypted local vault · AES-GCM-256 + PBKDF2 · keys stay in this
-						browser
+						Encrypted in this browser. Keys never leave your machine.
 					</SheetDescription>
 				</SheetHeader>
 				<div className="space-y-4 p-4">
@@ -628,17 +608,15 @@ export function InlineVaultSection({
 
 	if (status !== 'unlocked') {
 		return (
-			<div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-2 text-[11px] text-muted-foreground">
+			<div className="flex items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[11px] text-zinc-400">
 				<span className="flex items-center gap-1.5">
 					<KeyRound className="size-3.5 shrink-0 text-amber-400" />
-					{status === 'locked'
-						? 'Key vault locked — unlock to use saved keys.'
-						: 'Save keys in the encrypted vault.'}
+					{status === 'locked' ? 'Vault locked' : 'Save keys in the vault'}
 				</span>
 				<Button
 					variant="outline"
 					size="sm"
-					className="h-6 shrink-0 px-2 text-[10px]"
+					className="h-6 shrink-0 px-2.5 text-[10px]"
 					onClick={openSettings}
 					data-testid="inline-open-settings"
 				>
@@ -649,7 +627,7 @@ export function InlineVaultSection({
 	}
 
 	const body = (
-		<div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-2.5">
+		<div className="space-y-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
 			{fields.map((def) => (
 				<InlineKeyField key={def.field} def={def} />
 			))}
@@ -662,11 +640,11 @@ export function InlineVaultSection({
 				<button
 					type="button"
 					onClick={() => setOpen((o) => !o)}
-					className="flex w-full items-center justify-between text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+					className="flex w-full items-center justify-between text-[11px] font-medium text-zinc-400 transition-colors hover:text-zinc-200"
 					aria-expanded={open}
 				>
 					<span className="flex items-center gap-1.5">
-						<KeyRound className="size-3.5 text-emerald-400" />
+						<KeyRound className="size-3.5 text-orange-400" />
 						{title}
 					</span>
 					<ChevronDown
@@ -683,8 +661,8 @@ export function InlineVaultSection({
 
 	return (
 		<div className="space-y-3" data-testid="inline-vault-section">
-			<p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-				<KeyRound className="size-3.5 text-emerald-400" />
+			<p className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400">
+				<KeyRound className="size-3.5 text-orange-400" />
 				{title}
 			</p>
 			{body}
@@ -724,9 +702,7 @@ function InlineKeyField({ def }: { def: FieldDef }) {
 					{def.label}
 				</Label>
 				{storeValue ? (
-					<span className="text-[10px] font-medium text-emerald-400">
-						✓ saved
-					</span>
+					<span className="text-[10px] font-medium text-orange-400">Saved</span>
 				) : null}
 			</div>
 			<div className="flex gap-1.5">
@@ -757,10 +733,10 @@ function InlineKeyField({ def }: { def: FieldDef }) {
 			</div>
 			{saved && (
 				<p
-					className="text-[10px] text-emerald-400"
+					className="text-[10px] text-orange-400"
 					data-testid={`inline-saved-${def.field}`}
 				>
-					Saved — encrypted to the local vault
+					Saved to vault
 				</p>
 			)}
 		</div>

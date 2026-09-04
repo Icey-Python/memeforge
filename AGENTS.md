@@ -9,6 +9,13 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Backend: `cd server && .venv/bin/python -m pytest tests/ -q` (venv lives in `server/.venv`; also `.venv/bin/python -c "import app.main"` for an import smoke test).
 - Frontend: `cd web && pnpm typecheck && pnpm lint && pnpm build` (pnpm only; `pnpm lint` is biome — run `pnpm lint:fix` for auto-format, line width is 80).
 
+## Design system (studio UI)
+
+- One accent: orange (`#f97316` tokens in `globals.css`: `--primary`, `--ring`, both dark+light). Status semantics: amber = warn, red = error, emerald only for backend health + preset "ready". No other hues.
+- Shape lock: `rounded-full` for buttons/chips/badges/tabs, `rounded-xl` (12px) for node cards + drawer sections, `rounded-lg` (8px) for inputs/selects/thumbnails. Buttons get `active:scale-[0.98]`.
+- Node chrome: `NodeShell` (node-shell.tsx) is neutral zinc (`bg-zinc-900/95`, `border-white/10`); the `.node-card` class + `.react-flow__node.selected` rule in globals.css drives the orange selection ring. Never re-add per-node accent colors.
+- Copy rules: no em-dashes or emoji in user-visible strings (backend catalogs included); helpers stay one short line. The Topic node owns the "Generate script" CTA (the Script node stays hidden at stepwise stage 1, so its duplicate generate button was removed on purpose).
+
 ## Sharp edges
 
 - `web/src/hooks/query/keys.ts` is a query-key factory that no component imports; nodes use inline array keys (`['model-catalog']`, …). Follow the inline style.

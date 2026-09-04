@@ -2,8 +2,8 @@
 
 // Voiceover Node: TTS provider + voice picker + instant previews.
 //
-// The free meme-voice engines — Meme Classic (Brian & the classic Polly
-// cast) and TikTok Meme Voices — get their own category list with
+// The free meme-voice engines, Meme Classic (Brian & the classic Polly
+// cast) and TikTok Meme Voices, get their own category list with
 // per-voice preview buttons; edge/azure/google voices are grouped into
 // "meme staples" vs the rest.
 
@@ -108,10 +108,9 @@ export function VoiceoverNode(_props: NodeProps) {
 	return (
 		<NodeShell
 			icon={AudioLines}
-			title="Voiceover / TTS"
-			accent="bg-emerald-500/15 text-emerald-300"
+			title="Voiceover"
 			badge={
-				<NodeBadge variant="success">
+				<NodeBadge>
 					{TTS_PROVIDERS.find((p) => p.id === ttsProvider)?.free
 						? 'free'
 						: 'premium'}
@@ -126,7 +125,7 @@ export function VoiceoverNode(_props: NodeProps) {
 					onChange={(v) => setTtsProvider(v as TTSProviderId)}
 					options={TTS_PROVIDERS.map((p) => ({
 						value: p.id,
-						label: `${p.label} — ${p.hint}${p.free ? ' (free)' : ''}`
+						label: p.free ? `${p.label} (free)` : p.label
 					}))}
 				/>
 			</div>
@@ -135,9 +134,7 @@ export function VoiceoverNode(_props: NodeProps) {
 			{(ttsProvider === 'elevenlabs' || ttsProvider === 'azure') && (
 				<InlineVaultSection
 					title={
-						ttsProvider === 'elevenlabs'
-							? 'ElevenLabs key'
-							: 'Azure speech key + region'
+						ttsProvider === 'elevenlabs' ? 'ElevenLabs key' : 'Azure speech key'
 					}
 					compact
 					fields={
@@ -146,7 +143,7 @@ export function VoiceoverNode(_props: NodeProps) {
 									{
 										field: 'elevenlabsApiKey',
 										label: 'ElevenLabs API Key',
-										placeholder: 'xi-api key…',
+										placeholder: 'xi-api key',
 										serverFlag: 'tts_elevenlabs'
 									}
 								]
@@ -154,7 +151,7 @@ export function VoiceoverNode(_props: NodeProps) {
 									{
 										field: 'azureSpeechKey',
 										label: 'Azure Speech Key',
-										placeholder: 'subscription key…',
+										placeholder: 'subscription key',
 										serverFlag: 'tts_azure'
 									},
 									{
@@ -180,11 +177,6 @@ export function VoiceoverNode(_props: NodeProps) {
 							isMemeClassic ? 'meme-classic-voice-list' : 'tiktok-voice-list'
 						}
 					>
-						{isMemeClassic && (
-							<p className="text-[10px] text-muted-foreground">
-								The iconic Twitch meme TTS voices — free, keyless, no limits.
-							</p>
-						)}
 						{voiceOptions.map((v) => {
 							const selected = v.id === ttsVoice;
 							const previewing = previewingVoice === v.id;
@@ -194,8 +186,8 @@ export function VoiceoverNode(_props: NodeProps) {
 									className={cn(
 										'flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition-colors',
 										selected
-											? 'border-emerald-500/50 bg-emerald-500/10'
-											: 'border-border/60 bg-background/60'
+											? 'border-orange-500/50 bg-orange-500/10'
+											: 'border-white/10 bg-white/[0.02] hover:border-white/20'
 									)}
 								>
 									<button
@@ -204,13 +196,13 @@ export function VoiceoverNode(_props: NodeProps) {
 										onClick={() => setTtsVoice(v.id)}
 									>
 										{selected && (
-											<Check className="size-3.5 shrink-0 text-emerald-400" />
+											<Check className="size-3.5 shrink-0 text-orange-400" />
 										)}
 										<span className="min-w-0">
 											<span className="block truncate text-xs font-medium">
 												{v.label}
 											</span>
-											<span className="block text-[10px] text-muted-foreground">
+											<span className="block text-[10px] text-zinc-500">
 												{v.id} · {v.gender}
 											</span>
 										</span>
@@ -242,7 +234,7 @@ export function VoiceoverNode(_props: NodeProps) {
 							...(memeVoices.length > 0
 								? [
 										{
-											label: '⭐ Popular meme voices',
+											label: 'Meme voices',
 											options: memeVoices.map((v) => ({
 												value: v.id,
 												label: `${v.label} (${v.language}, ${v.gender})`
@@ -264,11 +256,8 @@ export function VoiceoverNode(_props: NodeProps) {
 						]}
 					/>
 				) : (
-					<p className="text-xs text-muted-foreground">
-						ElevenLabs voices appear once a key is configured — set one in the
-						key vault above (Settings → API Keys) or in the server env (
-						<code className="rounded bg-muted px-1">ELEVENLABS_API_KEY</code>
-						).
+					<p className="text-xs text-zinc-500">
+						Voices appear once a key is set above.
 					</p>
 				)}
 			</div>
@@ -311,21 +300,15 @@ export function VoiceoverNode(_props: NodeProps) {
 				aria-pressed={voiceConfirmed}
 				data-testid="confirm-voice"
 				className={cn(
-					'w-full font-semibold',
+					'w-full',
 					voiceConfirmed
-						? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
-						: 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-500 hover:to-teal-500'
+						? 'border border-orange-500/30 bg-orange-500/10 text-orange-300 hover:bg-orange-500/15'
+						: ''
 				)}
+				variant={voiceConfirmed ? 'outline' : 'default'}
 			>
-				{voiceConfirmed ? (
-					<>
-						<Check className="size-4" /> Voice confirmed
-					</>
-				) : (
-					<>
-						<Check className="size-4" /> Confirm Voice &amp; Next ➔
-					</>
-				)}
+				<Check className="size-4" />
+				{voiceConfirmed ? 'Voice confirmed' : 'Confirm voice'}
 			</Button>
 		</NodeShell>
 	);
