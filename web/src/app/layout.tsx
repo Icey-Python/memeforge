@@ -1,11 +1,5 @@
 import './globals.css';
-import {
-	IconAlertTriangle,
-	IconCheck,
-	IconInfoCircle,
-	IconLoader2,
-	IconX
-} from '@tabler/icons-react';
+import { Check, Info, Loader2, TriangleAlert, X } from 'lucide-react';
 import type { Metadata, Viewport } from 'next';
 import { DM_Sans } from 'next/font/google';
 import { Toaster } from 'sonner';
@@ -20,7 +14,7 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
 	title: {
-		default: 'Memeforge — short-form video studio',
+		default: 'Memeforge, short-form video studio',
 		template: '%s | Memeforge'
 	},
 	description:
@@ -56,13 +50,11 @@ export default function RootLayout({
 					position="top-center"
 					richColors
 					icons={{
-						success: <IconCheck className="text-primary size-5" />,
-						error: <IconX className="text-primary size-5" />,
-						info: <IconInfoCircle className="text-primary size-5" />,
-						warning: <IconAlertTriangle className="text-primary size-5" />,
-						loading: (
-							<IconLoader2 className="text-primary size-5 animate-spin" />
-						)
+						success: <Check className="size-5 text-primary" />,
+						error: <X className="size-5 text-primary" />,
+						info: <Info className="size-5 text-primary" />,
+						warning: <TriangleAlert className="text-primary size-5" />,
+						loading: <Loader2 className="text-primary size-5 animate-spin" />
 					}}
 					toastOptions={{
 						duration: 2000

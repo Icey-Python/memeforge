@@ -1,9 +1,14 @@
 'use client';
 
 // Desc: Shared chrome for studio canvas nodes: card, header, handles.
+//
+// Design system: one accent (orange) across selection states, active
+// controls and focus rings. Node chrome itself stays neutral zinc so the
+// canvas reads calm; `node-card` is the hook for the selected-node
+// highlight in globals.css.
 
 import { Handle, Position } from '@xyflow/react';
-import type { LucideIcon } from 'lucide-react';
+import { ChevronDown, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type HandleLayout = 'both' | 'source' | 'target' | 'none';
@@ -11,8 +16,6 @@ export type HandleLayout = 'both' | 'source' | 'target' | 'none';
 interface NodeShellProps {
 	icon: LucideIcon;
 	title: string;
-	/** tailwind classes for the header accent strip */
-	accent: string;
 	badge?: React.ReactNode;
 	children: React.ReactNode;
 	footer?: React.ReactNode;
@@ -24,12 +27,11 @@ interface NodeShellProps {
 }
 
 const handleClass =
-	'!h-3 !w-3 !border-2 !border-background !bg-muted-foreground/80';
+	'!h-2.5 !w-2.5 !border-2 !border-zinc-950 !bg-zinc-600 !transition-colors hover:!bg-orange-500';
 
 export function NodeShell({
 	icon: Icon,
 	title,
-	accent,
 	badge,
 	children,
 	footer,
@@ -41,19 +43,14 @@ export function NodeShell({
 	return (
 		<div
 			className={cn(
-				'w-[340px] rounded-xl border border-border/70 bg-card/95 shadow-2xl shadow-black/40 backdrop-blur',
+				'node-card w-[340px] rounded-xl border border-white/10 bg-zinc-900/95 shadow-xl shadow-black/30 backdrop-blur',
 				className
 			)}
 		>
-			<div
-				className={cn(
-					'flex items-center justify-between gap-2 rounded-t-xl border-b border-border/60 px-4 py-2.5',
-					accent
-				)}
-			>
+			<div className="flex items-center justify-between gap-2 px-4 pt-3.5">
 				<div className="flex items-center gap-2">
-					<Icon className="size-4" />
-					<span className="text-sm font-semibold tracking-tight">{title}</span>
+					<Icon className="size-4 text-zinc-500" />
+					<span className="text-[13px] font-medium text-zinc-200">{title}</span>
 				</div>
 				{badge}
 			</div>
@@ -95,15 +92,15 @@ export function NodeBadge({
 	variant?: 'default' | 'success' | 'warn' | 'danger';
 }) {
 	const styles = {
-		default: 'bg-muted text-muted-foreground',
-		success: 'bg-emerald-500/15 text-emerald-400',
-		warn: 'bg-amber-500/15 text-amber-400',
-		danger: 'bg-red-500/15 text-red-400'
+		default: 'bg-white/[0.06] text-zinc-400',
+		success: 'bg-orange-500/10 text-orange-400',
+		warn: 'bg-amber-500/10 text-amber-400',
+		danger: 'bg-red-500/10 text-red-400'
 	} as const;
 	return (
 		<span
 			className={cn(
-				'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+				'rounded-full px-2 py-0.5 text-[10px] font-medium',
 				styles[variant]
 			)}
 		>
@@ -134,27 +131,30 @@ export function StudioSelect({
 	placeholder?: string;
 }) {
 	return (
-		<select
-			id={id}
-			value={value}
-			onChange={(e) => onChange(e.target.value)}
-			className="h-9 w-full cursor-pointer appearance-none rounded-md border border-input bg-background px-3 pr-8 text-sm shadow-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-		>
-			{placeholder && <option value="">{placeholder}</option>}
-			{options?.map((opt) => (
-				<option key={opt.value} value={opt.value} disabled={opt.disabled}>
-					{opt.label}
-				</option>
-			))}
-			{groups?.map((group) => (
-				<optgroup key={group.label} label={group.label}>
-					{group.options.map((opt) => (
-						<option key={opt.value} value={opt.value} disabled={opt.disabled}>
-							{opt.label}
-						</option>
-					))}
-				</optgroup>
-			))}
-		</select>
+		<div className="relative">
+			<select
+				id={id}
+				value={value}
+				onChange={(e) => onChange(e.target.value)}
+				className="h-9 w-full cursor-pointer appearance-none rounded-lg border border-white/10 bg-white/[0.03] px-3 pr-8 text-sm transition-colors hover:border-white/20 focus-visible:border-orange-500/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+			>
+				{placeholder && <option value="">{placeholder}</option>}
+				{options?.map((opt) => (
+					<option key={opt.value} value={opt.value} disabled={opt.disabled}>
+						{opt.label}
+					</option>
+				))}
+				{groups?.map((group) => (
+					<optgroup key={group.label} label={group.label}>
+						{group.options.map((opt) => (
+							<option key={opt.value} value={opt.value} disabled={opt.disabled}>
+								{opt.label}
+							</option>
+						))}
+					</optgroup>
+				))}
+			</select>
+			<ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-zinc-500" />
+		</div>
 	);
 }

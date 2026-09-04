@@ -5,7 +5,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { NodeProps } from '@xyflow/react';
 import {
-	CheckCircle2,
+	Check,
 	CircleDashed,
 	Film,
 	Loader2,
@@ -29,13 +29,13 @@ function CheckItem({ ok, label }: { ok: boolean; label: string }) {
 		<li
 			className={cn(
 				'flex items-center gap-2 text-xs',
-				ok ? 'text-muted-foreground' : 'text-foreground'
+				ok ? 'text-zinc-500' : 'text-zinc-200'
 			)}
 		>
 			{ok ? (
-				<CheckCircle2 className="size-3.5 text-emerald-400" />
+				<Check className="size-3.5 text-orange-400" />
 			) : (
-				<CircleDashed className="size-3.5 text-muted-foreground/60" />
+				<CircleDashed className="size-3.5 text-zinc-600" />
 			)}
 			{label}
 			{!ok && <span className="text-red-400">needed</span>}
@@ -76,7 +76,7 @@ export function PreviewNode(_props: NodeProps) {
 			: Boolean(clip?.available);
 
 	const hasScript = scriptLines.some((l) => l.trim());
-	// A pasted custom script is a complete pipeline input on its own —
+	// A pasted custom script is a complete pipeline input on its own,
 	// rendering must not require a topic as well.
 	const ready = hasScript && backgroundReady;
 
@@ -94,14 +94,14 @@ export function PreviewNode(_props: NodeProps) {
 	const onRender = async () => {
 		try {
 			await startRender();
-			toast.success('Render queued — forging your short.');
+			toast.success('Render queued, forging your short.');
 		} catch (err: any) {
 			toast.error(err.message ?? 'Render failed to start.');
 		}
 	};
 
 	const statusBadge = () => {
-		if (!renderJob) return <NodeBadge>idle</NodeBadge>;
+		if (!renderJob) return null;
 		if (renderJob.status === 'completed')
 			return <NodeBadge variant="success">ready</NodeBadge>;
 		if (renderJob.status === 'failed')
@@ -113,7 +113,6 @@ export function PreviewNode(_props: NodeProps) {
 		<NodeShell
 			icon={Film}
 			title="Preview & Export"
-			accent="bg-rose-500/15 text-rose-300"
 			handles="target"
 			extraTargetId="gameplay"
 			badge={statusBadge()}
@@ -142,37 +141,33 @@ export function PreviewNode(_props: NodeProps) {
 						label: o.label
 					}))}
 				/>
-				<p className="text-[11px] text-muted-foreground">
-					Hooks use your script title; “Clean” renders the full video without a
-					card overlay.
-				</p>
 			</div>
 
-			<label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+			<label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-400">
 				<input
 					type="checkbox"
 					checked={sfxEnabled}
 					onChange={toggleSfx}
-					className="size-3.5 accent-rose-500"
+					className="size-3.5 accent-orange-500"
 				/>
-				SFX on the punchline 💥
+				Punchline SFX
 			</label>
 
 			{rendering ||
 			renderJob?.status === 'running' ||
 			renderJob?.status === 'queued' ? (
 				<div className="space-y-2">
-					<div className="h-2 overflow-hidden rounded-full bg-muted">
+					<div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
 						<div
-							className="h-full rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-500 transition-all"
+							className="h-full rounded-full bg-orange-500 transition-all"
 							style={{
 								width: `${Math.round((renderJob?.progress ?? 0) * 100)}%`
 							}}
 						/>
 					</div>
-					<p className="flex items-center gap-2 text-xs text-muted-foreground">
+					<p className="flex items-center gap-2 text-xs text-zinc-500">
 						<Loader2 className="size-3 animate-spin" />
-						{renderJob?.message ?? 'Working…'} (
+						{renderJob?.message ?? 'Working'} (
 						{Math.round((renderJob?.progress ?? 0) * 100)}%)
 					</p>
 				</div>
@@ -180,7 +175,7 @@ export function PreviewNode(_props: NodeProps) {
 				<Button
 					onClick={onRender}
 					disabled={!ready || rendering}
-					className="w-full bg-gradient-to-r from-fuchsia-600 to-violet-600 text-white hover:from-fuchsia-500 hover:to-violet-500"
+					className="w-full gap-1.5"
 				>
 					<Zap className="size-4" />
 					Render 1080×1920 short
@@ -188,7 +183,7 @@ export function PreviewNode(_props: NodeProps) {
 			)}
 
 			{renderJob?.status === 'failed' && (
-				<div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
+				<div className="rounded-xl border border-red-500/25 bg-red-500/10 p-3 text-xs text-red-300">
 					<p className="flex items-center gap-1.5 font-medium">
 						<XCircle className="size-3.5" /> Render failed
 					</p>
@@ -206,7 +201,7 @@ export function PreviewNode(_props: NodeProps) {
 
 			{renderJob?.status === 'completed' && renderJob.videoUrl && (
 				<div className="space-y-2">
-					<div className="mx-auto w-fit overflow-hidden rounded-xl border border-border/60 shadow-lg">
+					<div className="mx-auto w-fit overflow-hidden rounded-xl border border-white/10">
 						<video
 							controls
 							src={mediaUrl(renderJob.videoUrl)}
@@ -226,10 +221,9 @@ export function PreviewNode(_props: NodeProps) {
 			)}
 
 			{!ready && !rendering && !renderJob && (
-				<p className="text-[11px] leading-snug text-muted-foreground">
-					Connect the pipeline: model → topic → script → voiceover, plus a
-					background clip with its asset dropped on the server. Pasting a custom
-					script is enough — no topic needed.
+				<p className="text-[11px] text-zinc-600">
+					A script plus a background is enough to render. Pasting a custom
+					script works without a topic.
 				</p>
 			)}
 		</NodeShell>

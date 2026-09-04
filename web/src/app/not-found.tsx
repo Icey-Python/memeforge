@@ -5,12 +5,12 @@ import { Button } from '@/components/ui/button';
 export default function NotFound() {
 	return (
 		<section className="flex min-h-dvh flex-col items-center justify-center gap-6 px-6 text-center">
-			<span className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-500 to-violet-600">
-				<Flame className="size-7 text-white" />
+			<span className="flex size-14 items-center justify-center rounded-2xl bg-orange-500">
+				<Flame className="size-7 text-zinc-950" />
 			</span>
 			<div>
-				<h1 className="text-4xl font-black tracking-tight">404</h1>
-				<p className="mt-2 text-muted-foreground">
+				<h1 className="text-4xl font-bold tracking-tight">404</h1>
+				<p className="mt-2 text-zinc-500">
 					This page is so rare it does not exist yet.
 				</p>
 			</div>

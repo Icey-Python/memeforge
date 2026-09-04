@@ -142,7 +142,7 @@ export const STUDIO_STEPS = [
 	},
 	{
 		title: 'Render',
-		hint: 'All wired up — render your short.'
+		hint: 'All wired up. Render your short.'
 	}
 ] as const;
 

@@ -42,7 +42,7 @@ export const LLM_PROVIDERS: LLMProviderPreset[] = [
 		id: 'mock',
 		backend: 'mock',
 		label: 'Mock (offline)',
-		hint: 'deterministic stub — no key needed',
+		hint: 'deterministic stub, no key needed',
 		defaultModel: 'memeforge-stub',
 		baseUrl: ''
 	},
@@ -170,13 +170,13 @@ export const TTS_PROVIDERS: {
 	{
 		id: 'meme_classic',
 		label: 'Meme Classic (Brian)',
-		hint: 'Brian, Justin, Matthew — the iconic meme voices',
+		hint: 'Brian, Justin, Matthew: the iconic meme voices',
 		free: true
 	},
 	{
 		id: 'tiktok',
 		label: 'TikTok Meme Voices (legacy)',
-		hint: 'Unofficial — may fail, falls back to Brian',
+		hint: 'Unofficial, may fail',
 		free: true
 	},
 	{
@@ -188,7 +188,7 @@ export const TTS_PROVIDERS: {
 	{
 		id: 'azure',
 		label: 'Azure Speech',
-		hint: 'Paid tier — same voices, SLA',
+		hint: 'Paid tier with SLA',
 		free: false
 	},
 	{
@@ -276,7 +276,7 @@ export const EDGE_VOICES: VoiceOption[] = [
 export const TIKTOK_VOICES: VoiceOption[] = [
 	{
 		id: 'en_us_002',
-		label: 'Jessie — classic TikTok voice',
+		label: 'Jessie (classic TikTok voice)',
 		language: 'en-US',
 		gender: 'female',
 		tags: ['meme']
@@ -316,21 +316,21 @@ export const TIKTOK_VOICES: VoiceOption[] = [
 export const MEME_CLASSIC_VOICES: VoiceOption[] = [
 	{
 		id: 'Brian',
-		label: 'Brian — iconic meme voice (British)',
+		label: 'Brian (iconic British meme voice)',
 		language: 'en-GB',
 		gender: 'male',
 		tags: ['meme', 'iconic']
 	},
 	{
 		id: 'Justin',
-		label: 'Justin — kid/teen story voice',
+		label: 'Justin (kid/teen story voice)',
 		language: 'en-US',
 		gender: 'male',
 		tags: ['meme', 'kid']
 	},
 	{
 		id: 'Matthew',
-		label: 'Matthew — deep serious narrator',
+		label: 'Matthew (deep serious narrator)',
 		language: 'en-US',
 		gender: 'male',
 		tags: ['meme', 'narration']
@@ -358,7 +358,7 @@ export const MEME_CLASSIC_VOICES: VoiceOption[] = [
 	},
 	{
 		id: 'Ivy',
-		label: 'Ivy — kid voice',
+		label: 'Ivy (kid voice)',
 		language: 'en-US',
 		gender: 'female',
 		tags: ['meme', 'kid']
@@ -376,7 +376,7 @@ export const MEME_CLASSIC_VOICES: VoiceOption[] = [
 export const GOOGLE_VOICES: VoiceOption[] = [
 	{
 		id: 'en',
-		label: 'Google US English — reliability fallback',
+		label: 'Google US English (fallback)',
 		language: 'en-US',
 		gender: 'female',
 		tags: ['fallback']

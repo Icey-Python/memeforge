@@ -96,16 +96,16 @@
 @layer base {
 	:root {
 		--background: 0 0% 100%;
-		--foreground: 0 0% 3.9%;
+		--foreground: 240 5.9% 10%;
 
 		--card: 0 0% 100%;
-		--card-foreground: 0 0% 3.9%;
+		--card-foreground: 240 5.9% 10%;
 
 		--popover: 0 0% 100%;
-		--popover-foreground: 0 0% 3.9%;
+		--popover-foreground: 240 5.9% 10%;
 
-		--primary: 0 0% 9%;
-		--primary-foreground: 0 0% 98%;
+		--primary: 24.6 95% 53.1%;
+		--primary-foreground: 240 5.9% 10%;
 
 		--secondary: 0 0% 96.1%;
 		--secondary-foreground: 0 0% 9%;
@@ -114,14 +114,14 @@
 		--muted-foreground: 0 0% 45.1%;
 
 		--accent: 0 0% 96.1%;
-		--accent-foreground: 0 0% 9%;
+		--accent-foreground: 240 5.9% 10%;
 
 		--destructive: 0 84.2% 60.2%;
 		--destructive-foreground: 0 0% 98%;
 
 		--border: 0 0% 89.8%;
 		--input: 0 0% 89.8%;
-		--ring: 0 0% 3.9%;
+		--ring: 24.6 95% 53.1%;
 
 		--radius: 0.5rem;
 
@@ -140,14 +140,14 @@
 		--background: 0 0% 3.9%;
 		--foreground: 0 0% 98%;
 
-		--card: 0 0% 3.9%;
+		--card: 240 5.9% 7%;
 		--card-foreground: 0 0% 98%;
 
-		--popover: 0 0% 3.9%;
+		--popover: 240 5.9% 7%;
 		--popover-foreground: 0 0% 98%;
 
-		--primary: 0 0% 98%;
-		--primary-foreground: 0 0% 9%;
+		--primary: 24.6 95% 53.1%;
+		--primary-foreground: 240 5.9% 10%;
 
 		--secondary: 0 0% 14.9%;
 		--secondary-foreground: 0 0% 98%;
@@ -158,12 +158,12 @@
 		--accent: 0 0% 14.9%;
 		--accent-foreground: 0 0% 98%;
 
-		--destructive: 0 62.8% 30.6%;
+		--destructive: 0 72% 51%;
 		--destructive-foreground: 0 0% 98%;
 
 		--border: 0 0% 14.9%;
 		--input: 0 0% 14.9%;
-		--ring: 0 0% 83.1%;
+		--ring: 24.6 95% 53.1%;
 		--chart-1: 220 70% 50%;
 		--chart-2: 160 60% 45%;
 		--chart-3: 30 80% 55%;
@@ -269,4 +269,30 @@
 
 .react-flow__edge.edge-reveal {
 	animation: edge-reveal 0.5s ease-out both;
+}
+
+/* Studio canvas, minimal zinc surfaces with a single orange accent:
+ * neutral edges, orange for selected nodes/edges and handle hovers. */
+.react-flow__edge-path {
+	stroke: #3f3f46;
+	stroke-width: 1.5;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+	stroke: #f97316;
+}
+
+.react-flow__node.selected .node-card {
+	border-color: rgb(249 115 22 / 0.5);
+	box-shadow:
+		0 0 0 1px rgb(249 115 22 / 0.35),
+		0 16px 40px -16px rgb(0 0 0 / 0.6);
+}
+
+/* Native select popup lists follow the OS; the closed control matches
+ * the input styling set in node-shell.tsx. */
+select option,
+select optgroup {
+	background-color: #18181b;
+	color: #fafafa;
 }
