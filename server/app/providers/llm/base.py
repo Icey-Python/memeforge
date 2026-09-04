@@ -46,6 +46,10 @@ def default_line_count(duration_target: int) -> int:
 class GeneratedScript(BaseModel):
     title: str
     lines: List[str]
+    # Visual stock-video search phrases tied to the script content
+    # (10+ when the connector supports them; the endpoint pads via the
+    # offline heuristic when a model returns none).
+    keywords: List[str] = []
 
 
 class DiscoveredModel(BaseModel):

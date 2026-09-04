@@ -159,7 +159,7 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
         elif line_durations:
             total_audio_duration = sum(line_durations)
 
-        # --- 3. Background: stock clips → stitched continuous video -------------
+        # --- 3. Background: stock clips → stitched continuous video --------------
         if request.stock_clips:
             from app.services.rendering import stitcher
 
@@ -171,15 +171,29 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
                 ),
             )
             clips = await stitcher.download_stock_clips(request.stock_clips, workdir)
-            store.update(job_id, progress=0.55,
-                         message="Stitching multi-clip background")
+            store.update(
+                job_id, progress=0.55,
+                message=(
+                    "Stitching fast-switching montage background"
+                    if request.stock_montage
+                    else "Stitching multi-clip background"
+                ),
+            )
             # Target = the exact final cut (audio + tail), so the stitched
             # background covers the whole render with cuts, no gaps.
             target_duration = compositor.final_cut_duration(
                 [], total_audio_duration
             )
+            segments = None
+            if request.stock_montage:
+                # Fast-switching montage: every clip plays a 1.5-3s cut
+                # (cycled with fresh in-points) instead of its full length.
+                segments = stitcher.plan_montage_segments(
+                    [duration for _, duration in clips], target_duration
+                )
             gameplay = await stitcher.stitch_background(
-                clips, workdir / "background.mp4", target_duration
+                clips, workdir / "background.mp4", target_duration,
+                segments=segments,
             )
 
         # --- 4. Captions + card -------------------------------------------------

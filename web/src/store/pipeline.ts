@@ -31,6 +31,10 @@ interface PipelineStore {
 	scriptMode: 'generated' | 'custom';
 	scriptTitle: string;
 	scriptLines: string[];
+	/** Visual stock-video search phrases tied to the script (10+ when
+	 * generated; editable in the script node). Drives the stock montage
+	 * auto-select. */
+	scriptKeywords: string[];
 	/** Raw text block for the paste/write custom script flow. */
 	customScriptText: string;
 	ttsProvider: TTSProviderId;
@@ -41,6 +45,9 @@ interface PipelineStore {
 	backgroundMode: BackgroundMode;
 	/** Stock clips picked for the background (mode "stock"), in order. */
 	stockClips: StockClipSelection[];
+	/** Fast-switching montage: each clip plays a ~1.5-3s cut instead of
+	 * its full length (auto-selected keyword montages turn this on). */
+	stockMontage: boolean;
 	sfxEnabled: boolean;
 	/** Top card overlay style for the render. */
 	cardStyle: CardStyleId;
@@ -69,6 +76,12 @@ interface PipelineStore {
 	setScriptMode: (mode: 'generated' | 'custom') => void;
 	setScriptLines: (lines: string[]) => void;
 	setScriptTitle: (title: string) => void;
+	/** Replace the whole keyword set (edit/add/remove in the script node). */
+	setScriptKeywords: (keywords: string[]) => void;
+	/** Add one keyword (deduped) from the script node's add field. */
+	addScriptKeyword: (keyword: string) => void;
+	/** Remove a keyword by index (script node chip X buttons). */
+	removeScriptKeyword: (index: number) => void;
 	setCustomScriptText: (text: string) => void;
 	/** Split the pasted text into lines; unlocks the voiceover step. */
 	applyCustomScript: () => void;
@@ -80,6 +93,12 @@ interface PipelineStore {
 	setBackgroundMode: (mode: BackgroundMode) => void;
 	/** Add/remove a stock clip from the ordered background selection. */
 	toggleStockClip: (clip: StockClipSelection) => void;
+	/** Replace the picks with an auto-selected montage sequence. */
+	applyStockMontage: (clips: StockClipSelection[]) => void;
+	/** Toggle fast-switching cuts (1.5-3s per clip) on the stock picks. */
+	setStockMontage: (montage: boolean) => void;
+	/** Swap one auto-selected montage clip in place (per-clip refresh). */
+	swapStockClip: (index: number, clip: StockClipSelection) => void;
 	setCardStyle: (style: CardStyleId) => void;
 	toggleSfx: () => void;
 	setStepwise: (stepwise: boolean) => void;
@@ -154,12 +173,14 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 	scriptMode: 'generated',
 	scriptTitle: '',
 	scriptLines: [],
+	scriptKeywords: [],
 	customScriptText: '',
 	ttsProvider: 'edge',
 	ttsVoice: VOICE_DEFAULTS.edge,
 	gameplayId: 'minecraft-parkour',
 	backgroundMode: 'preset',
 	stockClips: [],
+	stockMontage: true,
 	sfxEnabled: true,
 	cardStyle: 'hook',
 
@@ -180,6 +201,18 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 	setScriptMode: (scriptMode) => set({ scriptMode }),
 	setScriptLines: (lines) => set({ scriptLines: lines }),
 	setScriptTitle: (scriptTitle) => set({ scriptTitle }),
+	setScriptKeywords: (keywords) =>
+		set({ scriptKeywords: keywords.filter((k) => k.trim().length > 0) }),
+	addScriptKeyword: (keyword) =>
+		set((s) => {
+			const cleaned = keyword.trim().toLowerCase();
+			if (!cleaned || s.scriptKeywords.includes(cleaned)) return s;
+			return { scriptKeywords: [...s.scriptKeywords, cleaned] };
+		}),
+	removeScriptKeyword: (index) =>
+		set((s) => ({
+			scriptKeywords: s.scriptKeywords.filter((_, i) => i !== index)
+		})),
 	setCustomScriptText: (customScriptText) => set({ customScriptText }),
 	applyCustomScript: () => {
 		const lines = splitScriptText(get().customScriptText);
@@ -188,10 +221,13 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 			return;
 		}
 		// A custom script needs no LLM round-trip: splitting it directly
-		// unlocks the voiceover step (lines stay editable).
+		// unlocks the voiceover step (lines stay editable). Keywords from a
+		// previous generation no longer match — the montage auto-select
+		// derives fresh ones from the script text server-side.
 		set({
 			scriptTitle: deriveScriptTitle(lines),
 			scriptLines: lines,
+			scriptKeywords: [],
 			scriptConfirmed: true,
 			generatingError: null
 		});
@@ -210,6 +246,20 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 					? s.stockClips.filter((c) => c.url !== clip.url)
 					: [...s.stockClips, clip]
 			};
+		}),
+	applyStockMontage: (clips) =>
+		set({
+			backgroundMode: 'stock',
+			stockClips: clips,
+			stockMontage: true
+		}),
+	setStockMontage: (stockMontage) => set({ stockMontage }),
+	swapStockClip: (index, clip) =>
+		set((s) => {
+			if (index < 0 || index >= s.stockClips.length) return s;
+			const next = [...s.stockClips];
+			next[index] = clip;
+			return { stockClips: next };
 		}),
 	setCardStyle: (cardStyle) => set({ cardStyle }),
 	toggleSfx: () => set((s) => ({ sfxEnabled: !s.sfxEnabled })),
@@ -244,7 +294,10 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 			set({
 				generating: false,
 				scriptTitle: script.title,
-				scriptLines: script.lines.map((l) => l.text)
+				scriptLines: script.lines.map((l) => l.text),
+				// The keyword set ships with the script (10+ visual stock
+				// search phrases) — editable in the script node.
+				scriptKeywords: script.keywords ?? []
 			});
 		} catch (err: any) {
 			set({
@@ -277,6 +330,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 				// gameplay loop — the backend requires exactly one of them.
 				gameplay_id: useStock ? undefined : s.gameplayId,
 				stock_clips: useStock ? s.stockClips : undefined,
+				// Fast-switching cuts (~1.5-3s per clip) on the stock picks.
+				stock_montage: useStock ? s.stockMontage : undefined,
 				card_style: s.cardStyle,
 				sfx_on_punchlines: s.sfxEnabled,
 				...ttsCreds

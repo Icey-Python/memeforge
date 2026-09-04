@@ -7,6 +7,11 @@ from fastapi import APIRouter, HTTPException
 from app.core import settings
 from app.providers.llm import registry as llm_registry
 from app.providers.llm.base import default_line_count
+from app.providers.stock.keywords import (
+    SCRIPT_KEYWORD_MAX,
+    SCRIPT_KEYWORD_MIN,
+    heuristic_keywords,
+)
 from app.schemas.render_schema import (
     LLMProvider,
     ModelDiscoveryRequest,
@@ -88,6 +93,19 @@ async def generate_script(request: ScriptGenerateRequest):
             status_code=502, detail=f"Script generation failed: {exc}"
         ) from exc
 
+    # Visual keywords ship with the script (10+ by default) so the stock
+    # montage needs no second LLM round-trip. Connectors that return
+    # none (or a short set) get padded by the offline heuristic.
+    keywords = [k.strip().lower() for k in script.keywords if k.strip()]
+    if len(keywords) < SCRIPT_KEYWORD_MIN:
+        fallback = heuristic_keywords(
+            "\n".join(script.lines),
+            max_queries=SCRIPT_KEYWORD_MAX,
+            min_queries=SCRIPT_KEYWORD_MIN,
+            topic=request.topic,
+        )
+        keywords = list(dict.fromkeys(keywords + fallback))[:SCRIPT_KEYWORD_MAX]
+
     # Last line is always the punchline (SFX + caption color).
     return ScriptResponse(
         topic=request.topic,
@@ -102,5 +120,6 @@ async def generate_script(request: ScriptGenerateRequest):
             }
             for i, text in enumerate(script.lines)
         ],
+        keywords=keywords,
         generated_at=datetime.now(timezone.utc),
     )

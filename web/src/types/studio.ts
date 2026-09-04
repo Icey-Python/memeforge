@@ -108,6 +108,9 @@ export interface StockClipSelection {
 	url: string;
 	duration_s: number;
 	label: string;
+	/** The script keyword that pulled this clip (auto-selected montages;
+	 * powers the per-clip swap refresh). */
+	keyword?: string;
 }
 
 export interface VoiceOption {
@@ -125,6 +128,10 @@ export interface ScriptResponse {
 	provider: string;
 	model: string | null;
 	lines: { index: number; text: string; is_punchline: boolean }[];
+	/** Visual stock-video search phrases tied to the script (10+ by
+	 * default) — editable in the script node, consumed by the stock
+	 * montage auto-select. */
+	keywords: string[];
 	generated_at: string;
 }
 
@@ -140,6 +147,17 @@ export interface RenderJobInfo {
 export interface KeywordExtractResponse {
 	queries: string[];
 	source: 'llm' | 'heuristic';
+}
+
+/** POST /stock/auto-select — a planned fast-switching montage sequence. */
+export interface StockAutoSelectResponse {
+	clips: StockClipSelection[];
+	keywords: string[];
+	duration_s: number;
+	segment_s: number;
+	segments_needed: number;
+	notice: string | null;
+	providers: StockProviderInfo[];
 }
 
 // --- Encrypted API-key vault (Settings → API Keys) --------------------------

@@ -420,8 +420,9 @@ def test_stitch_background_args_shape(tmp_path):
     args = stitcher.stitch_background_args(clips, tmp_path / "out.mp4", 11.0)
     joined = " ".join(args)
     assert "concat=n=2:v=1:a=0" in joined
-    assert "trim=duration=8.000" in joined
-    assert "trim=duration=3.000" in joined
+    # Ordered-playlist mode: whole clips from 0:00, trimmed to budget.
+    assert "trim=start=0.000:duration=8.000" in joined
+    assert "trim=start=0.000:duration=3.000" in joined
     # Normalized to the render canvas, audio dropped.
     assert "scale=1080:1920" in joined
     assert "-an" in args
@@ -433,7 +434,28 @@ def test_stitch_background_args_single_clip(tmp_path):
     args = stitcher.stitch_background_args(clips, tmp_path / "out.mp4", 4.0)
     joined = " ".join(args)
     assert "concat=n=" not in joined
-    assert "trim=duration=4.000" in joined
+    assert "trim=start=0.000:duration=4.000" in joined
+
+
+def test_stitch_background_args_montage_segments(tmp_path):
+    """Montage plans drive per-segment in-points, not whole clips."""
+    clips = [(tmp_path / "a.mp4", 12.0), (tmp_path / "b.mp4", 9.0)]
+    segments = [
+        stitcher.StitchSegment(0, 0.0, 2.5),
+        stitcher.StitchSegment(1, 0.0, 3.0),
+        stitcher.StitchSegment(0, 2.5, 1.5),  # clip A continues at 2.5s
+    ]
+    args = stitcher.stitch_background_args(
+        clips, tmp_path / "out.mp4", 7.0, segments=segments
+    )
+    joined = " ".join(args)
+    assert "concat=n=3:v=1:a=0" in joined
+    assert "trim=start=0.000:duration=2.500" in joined
+    assert "trim=start=0.000:duration=3.000" in joined
+    assert "trim=start=2.500:duration=1.500" in joined
+    # The same source file is opened once per segment (fresh in-point).
+    assert joined.count(f"-i {tmp_path / 'a.mp4'}") == 2
+    assert joined.count(f"-i {tmp_path / 'b.mp4'}") == 1
 
 
 # --- Download (MockTransport) ---------------------------------------------------
@@ -518,3 +540,400 @@ def test_stitch_background_end_to_end(tmp_path):
     assert out.exists()
     duration = asyncio.run(compositor.probe_video_duration(out))
     assert duration == pytest.approx(5.5, abs=0.35)
+
+
+# --- Fast-switching montage planner -----------------------------------------------
+
+
+def test_plan_montage_segments_covers_target_with_rhythm():
+    """Many clips: every cut lands in 1.5-3s and the sum is exact."""
+    segments = stitcher.plan_montage_segments([12.0] * 30, 60.3)
+    assert abs(sum(s.duration_s for s in segments) - 60.3) < 0.05
+    # Rhythm cycles max → mid → min so cuts don't land on a metronome.
+    durations = [round(s.duration_s, 3) for s in segments[:3]]
+    assert durations == [3.0, 2.25, 1.5]
+    assert all(1.0 <= s.duration_s <= 3.0 + 1e-9 for s in segments[:-1])
+    # First pass walks the clips in order (clip N matches script point N).
+    assert [s.clip_index for s in segments[:5]] == [0, 1, 2, 3, 4]
+    assert all(s.start_s == 0.0 for s in segments[:5])
+
+
+def test_plan_montage_segments_cycles_with_fresh_inpoints():
+    """Few clips: later passes CONTINUE each clip where it stopped
+    (never replaying the same first seconds), skipping tail slivers."""
+    segments = stitcher.plan_montage_segments([5.0, 4.0], 20.0)
+    assert abs(sum(s.duration_s for s in segments) - 20.0) < 0.05
+    # No mid-sequence blips: every non-final cut is a proper 1.5s+ cut.
+    assert all(1.5 - 1e-6 <= s.duration_s <= 3.0 + 1e-6
+               for s in segments[:-1])
+    # clip0's segments advance: 0 → 3.0 → (wrap) 0 → 2.25 …
+    clip0_starts = [s.start_s for s in segments if s.clip_index == 0]
+    assert clip0_starts[0] == 0.0
+    assert clip0_starts[1] == pytest.approx(3.0)
+
+
+def test_plan_montage_segments_short_clips_play_whole():
+    """A clip shorter than the min segment still contributes (whole)."""
+    segments = stitcher.plan_montage_segments([1.2, 10.0], 12.0)
+    assert abs(sum(s.duration_s for s in segments) - 12.0) < 0.05
+    short_takes = [s for s in segments if s.clip_index == 0]
+    assert short_takes
+    assert all(s.duration_s == pytest.approx(1.2) for s in short_takes)
+
+
+def test_plan_montage_segments_single_clip_cuts():
+    """One long clip becomes a sequence of short cuts, not one long play."""
+    segments = stitcher.plan_montage_segments([30.0], 8.0)
+    assert len(segments) >= 3
+    assert abs(sum(s.duration_s for s in segments) - 8.0) < 0.05
+    starts = [s.start_s for s in segments]
+    assert starts == sorted(starts)  # advancing in-point, no replay
+
+
+def test_plan_montage_segments_caps_graph_size():
+    """Beyond the segment cap the plan stops (the compositor's
+    -stream_loop covers the remainder)."""
+    segments = stitcher.plan_montage_segments([10.0, 10.0], 600.0)
+    assert len(segments) == stitcher._MAX_MONTAGE_SEGMENTS
+
+
+def test_plan_montage_segments_rejects_bad_input():
+    with pytest.raises(ValueError):
+        stitcher.plan_montage_segments([], 10.0)
+    with pytest.raises(ValueError):
+        stitcher.plan_montage_segments([5.0], 0.0)
+
+
+@pytest.mark.skipif(ffmpeg_missing, reason="ffmpeg not on PATH")
+def test_stitch_montage_end_to_end(tmp_path):
+    """A montage plan renders as one exact-duration 1080x1920 sequence."""
+    import asyncio
+
+    clips = []
+    for i in range(3):
+        src = tmp_path / f"src-{i}.mp4"
+        asyncio.run(compositor.run_ffmpeg([
+            settings.FFMPEG_BIN, "-y",
+            "-f", "lavfi", "-t", "4.0",
+            "-i", f"testsrc2=size=540x960:rate=30",
+            "-vf", "scale=1080:1920",
+            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+            str(src),
+        ]))
+        clips.append((src, 4.0))
+
+    segments = stitcher.plan_montage_segments([4.0] * 3, 7.5)
+    assert len(segments) >= 3  # fast cuts, not full clips
+    out = asyncio.run(
+        stitcher.stitch_background(
+            clips, tmp_path / "bg.mp4", 7.5, segments=segments
+        )
+    )
+    assert out.exists()
+    duration = asyncio.run(compositor.probe_video_duration(out))
+    assert duration == pytest.approx(7.5, abs=0.35)
+
+
+# --- Montage auto-selection --------------------------------------------------------
+
+
+class FakeMontageProvider:
+    """Deterministic stand-in stock provider: returns keyword-tagged clips."""
+
+    def __init__(self, clips_by_query: dict, fail: bool = False):
+        self.clips_by_query = clips_by_query
+        self.fail = fail
+        self.queries: list = []
+
+    def is_configured(self) -> bool:
+        return True
+
+    async def search(self, query: str, per_page: int = 10):
+        self.queries.append(query)
+        if self.fail:
+            raise RuntimeError("provider down")
+        return self.clips_by_query.get(query, [])[:per_page]
+
+
+def _clip(provider: str, kid: str, keyword: str, duration_s: float = 8.0):
+    from app.schemas.render_schema import StockVideoResult
+
+    return StockVideoResult(
+        id=str(kid),
+        provider=provider,
+        title=f"{keyword} #{kid}",
+        duration_s=duration_s,
+        width=1080,
+        height=1920,
+        thumbnail_url="",
+        video_url=f"https://cdn/{provider}/{kid}.mp4",
+        author="tester",
+    )
+
+
+def _patch_providers(monkeypatch, *providers):
+    from app.providers.stock import registry as stock_registry
+
+    monkeypatch.setattr(
+        stock_registry,
+        "get_stock_providers",
+        lambda *args, **kwargs: list(providers),
+    )
+
+
+def test_auto_select_builds_keyword_timed_sequence(monkeypatch):
+    """60s @ 2.25s cuts → 27 segments; picks walk the keywords in order."""
+    keywords = [f"kw{i}" for i in range(12)]
+    provider = FakeMontageProvider(
+        {
+            kw: [_clip("pexels", f"{kw}-{i}", kw) for i in range(4)]
+            for kw in keywords
+        }
+    )
+    _patch_providers(monkeypatch, provider)
+
+    resp = client.post(
+        "/api/v1/stock/auto-select",
+        json={
+            "keywords": keywords,
+            "duration_s": 60.0,
+            "segment_s": 2.25,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    # 60 / 2.25 = 26.67 → 27 segments; enough candidates → 27 unique clips.
+    assert body["segments_needed"] == 27
+    assert len(body["clips"]) == 27
+    # Round-robin: the first pass takes one clip per keyword in order.
+    assert [c["keyword"] for c in body["clips"][:12]] == keywords
+    # Every keyword got searched.
+    assert set(provider.queries) == set(keywords)
+    # Clip refs carry everything the render + swap flow need.
+    first = body["clips"][0]
+    assert first["provider"] == "pexels"
+    assert first["url"] == "https://cdn/pexels/kw0-0.mp4"
+    assert first["keyword"] == "kw0"
+    assert first["duration_s"] == 8.0
+
+
+def test_auto_select_derives_keywords_and_duration_from_script(monkeypatch):
+    """No keywords: the heuristic extracts them; duration follows the
+    script's word count (~2.4 words/sec)."""
+    provider = FakeMontageProvider(
+        {
+            kw: [_clip("pexels", kw, kw)]
+            for kw in (
+                "pizza", "pizza close up", "pizza slow motion", "pizza 4k",
+                "pizza cinematic", "pizza b-roll", "pizza background",
+                "dough", "oven", "night",
+            )
+        }
+    )
+    _patch_providers(monkeypatch, provider)
+
+    script = ["pizza pizza pizza dough"] * 15  # 60 words
+    resp = client.post(
+        "/api/v1/stock/auto-select",
+        json={"script": script, "segment_s": 2.25},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["keywords"]) >= 6
+    assert any("pizza" in k for k in body["keywords"])
+    # 60 words / 2.4 wps = 25s → ceil(25 / 2.25) = 12 segments.
+    assert body["segments_needed"] == 12
+    assert body["duration_s"] == pytest.approx(25.0)
+    assert len(body["clips"]) > 0
+
+
+def test_auto_select_seed_reshuffles_picks(monkeypatch):
+    pool = {"kw": [_clip("pexels", f"kw-{i}", "kw") for i in range(10)]}
+    _patch_providers(monkeypatch, FakeMontageProvider(pool))
+
+    def run(seed):
+        resp = client.post(
+            "/api/v1/stock/auto-select",
+            json={
+                "keywords": ["kw"],
+                "duration_s": 9.0,
+                "segment_s": 3.0,
+                "seed": seed,
+            },
+        )
+        assert resp.status_code == 200
+        return [c["id"] for c in resp.json()["clips"]]
+
+    picks_a = run(1)
+    picks_b = run(2)
+    assert len(picks_a) == 3  # 9s / 3s = 3 clips
+    assert picks_a != picks_b  # fresh seed → fresh picks
+    assert run(1) == picks_a  # same seed → reproducible
+
+
+def test_auto_select_exclude_skips_picked_clips(monkeypatch):
+    """The swap flow: excluded clips never come back."""
+    pool = {"kw": [_clip("pexels", f"kw-{i}", "kw") for i in range(5)]}
+    _patch_providers(monkeypatch, FakeMontageProvider(pool))
+
+    resp = client.post(
+        "/api/v1/stock/auto-select",
+        json={
+            "keywords": ["kw"],
+            "duration_s": 3.0,
+            "segment_s": 3.0,
+            "exclude": [
+                {"provider": "pexels", "id": "kw-0", "url": "u",
+                 "duration_s": 8.0},
+                {"provider": "pexels", "id": "kw-1", "url": "u",
+                 "duration_s": 8.0},
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    ids = [c["id"] for c in resp.json()["clips"]]
+    assert "kw-0" not in ids and "kw-1" not in ids
+    assert ids == ["kw-2"]
+
+
+def test_auto_select_skips_too_short_clips(monkeypatch):
+    pool = {
+        "kw": [
+            _clip("pexels", "short", "kw", duration_s=1.0),  # < 2s floor
+            _clip("pexels", "good", "kw", duration_s=6.0),
+        ]
+    }
+    _patch_providers(monkeypatch, FakeMontageProvider(pool))
+
+    resp = client.post(
+        "/api/v1/stock/auto-select",
+        json={"keywords": ["kw"], "duration_s": 3.0, "segment_s": 3.0},
+    )
+    assert resp.status_code == 200
+    ids = [c["id"] for c in resp.json()["clips"]]
+    assert ids == ["good"]
+
+
+def test_auto_select_provider_failure_degrades(monkeypatch):
+    """One provider blowing up doesn't kill the selection."""
+    _patch_providers(
+        monkeypatch,
+        FakeMontageProvider({}, fail=True),
+        FakeMontageProvider({"kw": [_clip("pixabay", "px-7", "kw")]}),
+    )
+    resp = client.post(
+        "/api/v1/stock/auto-select",
+        json={"keywords": ["kw"], "duration_s": 3.0, "segment_s": 3.0},
+    )
+    assert resp.status_code == 200
+    clips = resp.json()["clips"]
+    assert len(clips) == 1
+    assert clips[0]["provider"] == "pixabay"
+
+
+def test_auto_select_caps_unique_clips(monkeypatch):
+    """A huge duration still picks at most STOCK_MAX_MONTAGE_CLIPS clips."""
+    pool = {
+        f"kw{i}": [_clip("pexels", f"kw{i}-{j}", f"kw{i}") for j in range(6)]
+        for i in range(12)
+    }
+    _patch_providers(monkeypatch, FakeMontageProvider(pool))
+
+    resp = client.post(
+        "/api/v1/stock/auto-select",
+        json={
+            "keywords": list(pool),
+            "duration_s": 590.0,
+            "segment_s": 1.5,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["segments_needed"] == 394
+    assert len(body["clips"]) == settings.STOCK_MAX_MONTAGE_CLIPS
+
+
+def test_auto_select_unkeyed_demo_notice(monkeypatch):
+    """Unkeyed providers answer with curated demo clips + a notice."""
+    monkeypatch.setattr(settings, "PEXELS_API_KEY", "")
+    monkeypatch.setattr(settings, "PIXABAY_API_KEY", "")
+
+    resp = client.post(
+        "/api/v1/stock/auto-select",
+        json={
+            "keywords": ["city night walk"],
+            "duration_s": 9.0,
+            "segment_s": 3.0,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["clips"]) > 0
+    assert "PEXELS_API_KEY" in body["notice"]
+    providers = {p["id"]: p["keyed"] for p in body["providers"]}
+    assert providers == {"pexels": False, "pixabay": False}
+
+
+def test_auto_select_rejects_empty_request():
+    resp = client.post("/api/v1/stock/auto-select", json={})
+    assert resp.status_code == 422
+    assert "keywords" in resp.json()["detail"].lower()
+
+
+def test_auto_select_no_clips_is_502(monkeypatch):
+    _patch_providers(monkeypatch, FakeMontageProvider({}))
+    resp = client.post(
+        "/api/v1/stock/auto-select",
+        json={"keywords": ["nothing"], "duration_s": 3.0, "segment_s": 3.0},
+    )
+    assert resp.status_code == 502
+
+
+# --- Render validation: montage clip caps -----------------------------------------
+
+
+def _clip_payloads(count: int):
+    return [
+        {
+            "provider": "pexels",
+            "id": str(i),
+            "url": f"https://cdn/{i}.mp4",
+            "duration_s": 5.0,
+        }
+        for i in range(count)
+    ]
+
+
+def test_render_montage_allows_more_clips(monkeypatch):
+    """stock_montage raises the clip cap (1.5-3s cuts → more clips)."""
+    from app.services.rendering import renderer as renderer_module
+
+    async def noop(job_id, request):
+        return None
+
+    monkeypatch.setattr(renderer_module, "run_render_job", noop)
+    count = settings.STOCK_MAX_CLIPS + 5  # over the playlist cap
+    assert count <= settings.STOCK_MAX_MONTAGE_CLIPS
+    resp = client.post(
+        "/api/v1/render",
+        json={
+            "script": ["hello"],
+            "stock_clips": _clip_payloads(count),
+            "stock_montage": True,
+        },
+    )
+    assert resp.status_code == 200
+
+
+def test_render_rejects_too_many_montage_clips(monkeypatch):
+    count = settings.STOCK_MAX_MONTAGE_CLIPS + 1
+    resp = client.post(
+        "/api/v1/render",
+        json={
+            "script": ["hello"],
+            "stock_clips": _clip_payloads(count),
+            "stock_montage": True,
+        },
+    )
+    assert resp.status_code == 400
+    assert "Too many stock clips" in resp.json()["detail"]

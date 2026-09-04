@@ -55,6 +55,23 @@ _CLOSERS = [
     "Anyway, back to the grind.",
 ]
 
+# Visual stock-video search phrase templates for the keyword set that
+# ships with every generated script (>= 10, deterministic per topic).
+_KEYWORD_TEMPLATES = [
+    "{topic} close up",
+    "{topic} b-roll",
+    "{topic} slow motion",
+    "{topic} 4k footage",
+    "vertical {topic} background",
+    "{topic} aesthetic",
+    "{topic} macro shot",
+    "{topic} cinematic",
+    "{topic} in motion",
+    "{topic} detail shot",
+    "{topic} atmospheric",
+    "{topic} timelapse",
+]
+
 
 class MockLLMProvider(BaseLLMProvider):
     name = "mock"
@@ -96,8 +113,22 @@ class MockLLMProvider(BaseLLMProvider):
 
         closer = rng.choice(_CLOSERS)
         lines.append(closer)
+        # Deterministic visual keyword set (>= 10): the topic's key words
+        # formatted through stock-search-friendly templates, in seeded
+        # order. Stock sites match on short concrete phrases, so long
+        # topics are trimmed to their first three words.
+        topic_words = " ".join(topic.lower().split()[:3])
+        keywords = list(
+            dict.fromkeys(
+                t.format(topic=topic_words)
+                for t in rng.sample(
+                    _KEYWORD_TEMPLATES, len(_KEYWORD_TEMPLATES)
+                )
+            )
+        )
         # Mark the final line as the punchline (used for SFX timing later).
         return GeneratedScript(
             title=f"the {topic} take",
             lines=lines[:max_lines],
+            keywords=keywords,
         )

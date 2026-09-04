@@ -14,8 +14,11 @@ import {
 	ClipboardPaste,
 	Plus,
 	Sparkles,
-	Trash2
+	Tags,
+	Trash2,
+	X
 } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,6 +40,82 @@ function moveAt(list: string[], index: number, delta: number): string[] {
 	const next = [...list];
 	[next[index], next[target]] = [next[target], next[index]];
 	return next;
+}
+
+/** Editable keyword chip set: the visual search phrases that ship with a
+ * generated script (10+) and drive the auto-selected stock montage. */
+function KeywordChips() {
+	const keywords = usePipelineStore((s) => s.scriptKeywords);
+	const addKeyword = usePipelineStore((s) => s.addScriptKeyword);
+	const removeKeyword = usePipelineStore((s) => s.removeScriptKeyword);
+	const [draft, setDraft] = useState('');
+
+	const add = () => {
+		if (!draft.trim()) return;
+		addKeyword(draft);
+		setDraft('');
+	};
+
+	return (
+		<div className="space-y-1.5" data-testid="script-keywords">
+			<div className="flex items-center justify-between">
+				<Label className="flex items-center gap-1 text-[11px] text-muted-foreground">
+					<Tags className="size-3" />
+					Script keywords
+				</Label>
+				<span className="text-[10px] text-muted-foreground">
+					{keywords.length} · powers the stock montage
+				</span>
+			</div>
+			<div className="flex flex-wrap gap-1">
+				{keywords.map((keyword, i) => (
+					<span
+						key={keyword}
+						className="group flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 py-0.5 pr-1 pl-2 text-[11px] text-orange-300"
+					>
+						{keyword}
+						<button
+							type="button"
+							onClick={() => removeKeyword(i)}
+							aria-label={`Remove keyword ${keyword}`}
+							className="rounded-full p-0.5 text-orange-300/60 transition-colors hover:bg-orange-500/20 hover:text-red-400"
+						>
+							<X className="size-3" />
+						</button>
+					</span>
+				))}
+			</div>
+			<div className="flex gap-1.5">
+				<Input
+					value={draft}
+					onChange={(e) => setDraft(e.target.value)}
+					onKeyDown={(e) => {
+						if (e.key === 'Enter') {
+							e.preventDefault();
+							add();
+						}
+					}}
+					placeholder={
+						keywords.length
+							? 'Add a keyword…'
+							: 'e.g. city street night (used for stock b-roll search)'
+					}
+					className="h-7 text-[11px]"
+					aria-label="Add script keyword"
+				/>
+				<Button
+					variant="outline"
+					size="sm"
+					className="h-7 shrink-0 px-2"
+					onClick={add}
+					disabled={!draft.trim()}
+					aria-label="Add keyword"
+				>
+					<Plus className="size-3" />
+				</Button>
+			</div>
+		</div>
+	);
 }
 
 export function ScriptNode(_props: NodeProps) {
@@ -256,6 +335,10 @@ export function ScriptNode(_props: NodeProps) {
 							<Plus className="size-3" />
 							Add line
 						</Button>
+
+						{/* Visual keywords shipped with the script — editable, and the
+						 * search set for the auto-selected stock montage (Step 4). */}
+						<KeywordChips />
 
 						<div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
 							<span className="truncate" title={scriptTitle}>

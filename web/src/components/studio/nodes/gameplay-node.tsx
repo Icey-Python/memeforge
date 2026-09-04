@@ -17,6 +17,7 @@ import type { NodeProps } from '@xyflow/react';
 import {
 	Check,
 	Clapperboard,
+	Dices,
 	Film,
 	Gamepad2,
 	Loader2,
@@ -24,7 +25,8 @@ import {
 	Search,
 	Sparkles,
 	Wand2,
-	X
+	X,
+	Zap
 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -239,9 +241,14 @@ function PresetTab({
 
 function StockTab() {
 	const scriptLines = usePipelineStore((s) => s.scriptLines);
+	const scriptKeywords = usePipelineStore((s) => s.scriptKeywords);
 	const model = usePipelineStore((s) => s.model);
 	const stockClips = usePipelineStore((s) => s.stockClips);
+	const stockMontage = usePipelineStore((s) => s.stockMontage);
 	const toggleStockClip = usePipelineStore((s) => s.toggleStockClip);
+	const applyStockMontage = usePipelineStore((s) => s.applyStockMontage);
+	const setStockMontage = usePipelineStore((s) => s.setStockMontage);
+	const swapStockClip = usePipelineStore((s) => s.swapStockClip);
 
 	// Vault keys take priority over the server .env for both the stock
 	// search and the LLM keyword suggestion.
@@ -256,6 +263,22 @@ function StockTab() {
 	const [suggesting, setSuggesting] = useState(false);
 	const [suggestions, setSuggestions] = useState<string[]>([]);
 	const [error, setError] = useState<string | null>(null);
+
+	// Auto-selected montage state — the picks themselves live in the
+	// pipeline store; this is just the build summary + in-flight flags.
+	const [building, setBuilding] = useState(false);
+	const [swappingAt, setSwappingAt] = useState<number | null>(null);
+	const [montageInfo, setMontageInfo] = useState<{
+		segmentsNeeded: number;
+		segmentS: number;
+	} | null>(null);
+
+	const wordCount = scriptLines
+		.join(' ')
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean).length;
+	const canAutoBuild = wordCount > 0 || scriptKeywords.length > 0;
 
 	const search = async (q: string) => {
 		const term = q.trim();
@@ -276,6 +299,67 @@ function StockTab() {
 			setError(err?.response?.data?.detail ?? 'Stock search failed.');
 		} finally {
 			setSearching(false);
+		}
+	};
+
+	// One-click montage: query Pexels / Pixabay with the script's keyword
+	// set and fetch enough 1-3s vertical clips to cover the spoken
+	// duration. A fresh seed reshuffles the picks.
+	const autoBuild = async (seed?: number) => {
+		setBuilding(true);
+		setError(null);
+		try {
+			const resp = await MemeforgeAPI.autoSelectStock({
+				// The generated keyword set drives the searches; a custom
+				// script falls back to server-side heuristic extraction.
+				keywords: scriptKeywords.length ? scriptKeywords : undefined,
+				script: scriptLines,
+				duration_s:
+					wordCount > 0 ? estimateSpokenSeconds(wordCount) : undefined,
+				segment_s: 2.25,
+				seed,
+				...stockCreds()
+			});
+			applyStockMontage(resp.clips);
+			setNotice(resp.notice);
+			setMontageInfo({
+				segmentsNeeded: resp.segments_needed,
+				segmentS: resp.segment_s
+			});
+		} catch (err: any) {
+			setError(err?.response?.data?.detail ?? 'Montage auto-build failed.');
+		} finally {
+			setBuilding(false);
+		}
+	};
+
+	// Per-clip swap: fetch a different clip for the same keyword,
+	// excluding everything already in the playlist.
+	const swapClip = async (index: number) => {
+		const clip = stockClips[index];
+		if (!clip?.keyword) return;
+		setSwappingAt(index);
+		setError(null);
+		try {
+			const resp = await MemeforgeAPI.autoSelectStock({
+				keywords: [clip.keyword],
+				duration_s: 2.25,
+				segment_s: 2.25,
+				seed: Date.now(),
+				exclude: stockClips,
+				...stockCreds()
+			});
+			const replacement = resp.clips[0];
+			if (!replacement) {
+				throw new Error('No alternative clip for this keyword.');
+			}
+			swapStockClip(index, replacement);
+		} catch (err: any) {
+			setError(
+				err?.response?.data?.detail ?? err?.message ?? 'Clip swap failed.'
+			);
+		} finally {
+			setSwappingAt(null);
 		}
 	};
 
@@ -318,9 +402,7 @@ function StockTab() {
 
 	// Coverage: the render stitches picks with cuts/repeats to the exact
 	// voiceover length, so >= needed duration means no visible looping.
-	const neededSeconds = estimateSpokenSeconds(
-		scriptLines.join(' ').trim().split(/\s+/).filter(Boolean).length
-	);
+	const neededSeconds = estimateSpokenSeconds(wordCount);
 	const pickedSeconds = stockClips.reduce((sum, c) => sum + c.duration_s, 0);
 	const coverage = neededSeconds > 0 ? pickedSeconds / neededSeconds : 0;
 
@@ -346,8 +428,60 @@ function StockTab() {
 				]}
 			/>
 
+			{/* One-click fast-switching montage from the script keywords. */}
+			<div
+				className="space-y-1.5 rounded-lg border border-sky-500/30 bg-sky-500/5 p-2.5"
+				data-testid="montage-auto-build"
+			>
+				<div className="flex items-center justify-between gap-2">
+					<div className="min-w-0">
+						<p className="text-[11px] font-semibold text-sky-300">
+							Auto-build montage
+						</p>
+						<p className="text-[10px] leading-snug text-muted-foreground">
+							{scriptKeywords.length
+								? `${scriptKeywords.length} script keywords → ~2s cuts`
+								: 'Keywords from your script → ~2s cuts'}
+						</p>
+					</div>
+					<Button
+						size="sm"
+						className="h-7 shrink-0 gap-1 bg-sky-600 px-2.5 text-white hover:bg-sky-500"
+						onClick={() => autoBuild()}
+						disabled={building || !canAutoBuild}
+						data-testid="auto-build-montage"
+					>
+						{building ? (
+							<Loader2 className="size-3.5 animate-spin" />
+						) : (
+							<Wand2 className="size-3.5" />
+						)}
+						Build
+					</Button>
+				</div>
+				{montageInfo && stockClips.length > 0 && (
+					<div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+						<span data-testid="montage-summary">
+							~{montageInfo.segmentsNeeded} cuts ·{' '}
+							{montageInfo.segmentS.toFixed(1)}s each · {stockClips.length}{' '}
+							unique clips
+						</span>
+						<button
+							type="button"
+							onClick={() => autoBuild(Date.now())}
+							disabled={building}
+							data-testid="montage-shuffle"
+							className="flex shrink-0 items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 transition-colors hover:border-sky-500/40 hover:text-sky-300"
+						>
+							<Dices className="size-3" />
+							Shuffle
+						</button>
+					</div>
+				)}
+			</div>
+
 			<div className="space-y-1.5">
-				<Label htmlFor="stock-query">Search vertical stock clips</Label>
+				<Label htmlFor="stock-query">Or search vertical stock clips</Label>
 				<div className="flex gap-1.5">
 					<Input
 						id="stock-query"
@@ -443,21 +577,37 @@ function StockTab() {
 				</div>
 			)}
 
-			{/* Ordered multi-clip selection + coverage vs script duration */}
+			{/* Ordered multi-clip selection + montage mode vs coverage */}
 			{stockClips.length > 0 && (
 				<div
 					className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-2.5"
 					data-testid="stock-picks"
 				>
-					<div className="flex items-center justify-between text-[11px] font-medium">
+					<div className="flex items-center justify-between gap-2 text-[11px] font-medium">
 						<span>
 							Background playlist ({stockClips.length} clip
 							{stockClips.length === 1 ? '' : 's'})
 						</span>
-						<span className="text-muted-foreground">
-							{formatDuration(pickedSeconds)} / {formatDuration(neededSeconds)}{' '}
-							script
-						</span>
+						<button
+							type="button"
+							onClick={() => setStockMontage(!stockMontage)}
+							aria-pressed={stockMontage}
+							data-testid="montage-toggle"
+							title={
+								stockMontage
+									? 'Fast-switching montage: each clip plays ~1.5-3s before the cut'
+									: 'Playlist: each clip plays in full, in order'
+							}
+							className={cn(
+								'flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 transition-colors',
+								stockMontage
+									? 'border-sky-500/50 bg-sky-500/15 text-sky-300'
+									: 'border-border/60 text-muted-foreground hover:text-foreground'
+							)}
+						>
+							<Zap className="size-3" />
+							{stockMontage ? 'Fast cuts' : 'Full clips'}
+						</button>
 					</div>
 					<ol className="space-y-1">
 						{stockClips.map((clip, i) => (
@@ -468,7 +618,40 @@ function StockTab() {
 								<span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-[9px] font-bold text-sky-300">
 									{i + 1}
 								</span>
-								<span className="min-w-0 flex-1 truncate">{clip.label}</span>
+								<span
+									className="min-w-0 flex-1 truncate"
+									title={
+										clip.keyword
+											? `${clip.label} — keyword: ${clip.keyword}`
+											: clip.label
+									}
+								>
+									{clip.label}
+								</span>
+								{clip.keyword && (
+									<span
+										className="max-w-24 shrink-0 truncate rounded-full bg-sky-500/10 px-1.5 text-[9px] text-sky-300"
+										title={`Keyword: ${clip.keyword}`}
+									>
+										{clip.keyword}
+									</span>
+								)}
+								{clip.keyword && (
+									<button
+										type="button"
+										onClick={() => swapClip(i)}
+										disabled={swappingAt === i}
+										title={`Swap this clip (searches "${clip.keyword}" for another)`}
+										aria-label={`Swap ${clip.label}`}
+										className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-sky-300"
+									>
+										{swappingAt === i ? (
+											<Loader2 className="size-3 animate-spin" />
+										) : (
+											<Dices className="size-3" />
+										)}
+									</button>
+								)}
 								<span className="shrink-0 text-muted-foreground">
 									{formatDuration(clip.duration_s)}
 								</span>
@@ -483,22 +666,31 @@ function StockTab() {
 							</li>
 						))}
 					</ol>
-					<div className="h-1.5 overflow-hidden rounded-full bg-muted">
-						<div
-							className={cn(
-								'h-full rounded-full transition-all',
-								coverage >= 1
-									? 'bg-emerald-500'
-									: 'bg-gradient-to-r from-amber-500 to-orange-500'
-							)}
-							style={{ width: `${Math.min(100, coverage * 100)}%` }}
-						/>
-					</div>
-					<p className="text-[10px] leading-snug text-muted-foreground">
-						{coverage >= 1
-							? 'Full coverage — the picks cover your whole voiceover.'
-							: 'Short on coverage — clips will repeat to fill the voiceover. Pick more for variety.'}
-					</p>
+					{stockMontage ? (
+						<p className="text-[10px] leading-snug text-muted-foreground">
+							Fast-switching montage — each clip plays ~1.5–3s before the cut,
+							cycled to cover your whole voiceover.
+						</p>
+					) : (
+						<>
+							<div className="h-1.5 overflow-hidden rounded-full bg-muted">
+								<div
+									className={cn(
+										'h-full rounded-full transition-all',
+										coverage >= 1
+											? 'bg-emerald-500'
+											: 'bg-gradient-to-r from-amber-500 to-orange-500'
+									)}
+									style={{ width: `${Math.min(100, coverage * 100)}%` }}
+								/>
+							</div>
+							<p className="text-[10px] leading-snug text-muted-foreground">
+								{coverage >= 1
+									? 'Full coverage — the picks cover your whole voiceover.'
+									: 'Short on coverage — clips will repeat to fill the voiceover. Pick more for variety.'}
+							</p>
+						</>
+					)}
 				</div>
 			)}
 		</>

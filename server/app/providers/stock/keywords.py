@@ -21,6 +21,16 @@ from app.providers.llm.base import BaseLLMProvider
 MIN_QUERIES = 3
 MAX_QUERIES = 5
 
+# Script generation ships a bigger keyword set alongside the lines so
+# the stock montage never needs a second LLM round-trip.
+SCRIPT_KEYWORD_MIN = 10
+SCRIPT_KEYWORD_MAX = 14
+
+# Stock-search-friendly suffixes used to pad thin keyword sets.
+_KEYWORD_SUFFIXES = (
+    "close up", "slow motion", "4k", "cinematic", "b-roll", "background",
+)
+
 _SYSTEM_PROMPT = (
     "You extract visual stock-video search queries for a short-form "
     "video script. Read the script and output 3-5 concise search "
@@ -51,16 +61,23 @@ _STOPWORDS = {
 }
 
 
-def heuristic_keywords(script: str, max_queries: int = MAX_QUERIES) -> List[str]:
+def heuristic_keywords(
+    script: str,
+    max_queries: int = MAX_QUERIES,
+    min_queries: int = MIN_QUERIES,
+    topic: str = "",
+) -> List[str]:
     """Deterministic offline extractor: frequency-ranked content words.
 
     Strips stopwords, ranks the remaining words by frequency, and builds
-    short visual queries from the top words (plus a couple of stock-y
-    variants when the script is too thin for organic multi-word queries).
+    short visual queries from the top words (plus stock-y variants when
+    the script is too thin for organic multi-word queries). `topic`
+    variant phrases (e.g. "elden ring close up") pad the set when the
+    script text alone cannot reach `min_queries`.
     """
     words = [w for w in re.findall(r"[a-zA-Z']+", script.lower())]
     content = [w for w in words if w not in _STOPWORDS and len(w) > 2]
-    if not content:
+    if not content and not topic.strip():
         return []
 
     counts = Counter(content)
@@ -82,10 +99,20 @@ def heuristic_keywords(script: str, max_queries: int = MAX_QUERIES) -> List[str]
             break
         if w not in queries and not any(w in q for q in queries):
             queries.append(w)
-    if len(queries) < MIN_QUERIES and top:
-        for variant in (f"{top[0]} close up", f"{top[0]} slow motion", f"{top[0]} 4k"):
-            if variant not in queries:
-                queries.append(variant)
+    if len(queries) < min_queries:
+        # Variant phrases ("{base} close up", "{base} 4k", ...) — topic
+        # words first (most on-theme), then the script's top words.
+        bases = [w for w in topic.lower().split() if len(w) > 2]
+        bases += [w for w in top if w not in bases]
+        seen = set(queries)
+        for base in bases:
+            for suffix in _KEYWORD_SUFFIXES:
+                variant = f"{base} {suffix}"
+                if len(queries) >= max_queries:
+                    break
+                if variant not in seen:
+                    queries.append(variant)
+                    seen.add(variant)
             if len(queries) >= max_queries:
                 break
     return queries[:max_queries]

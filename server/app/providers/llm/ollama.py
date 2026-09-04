@@ -102,9 +102,16 @@ class OllamaProvider(BaseLLMProvider):
             "short-form platforms (YouTube Shorts, TikTok, Reels). Target "
             f"{duration_target} seconds of spoken speech — roughly "
             f"{w_min}-{w_max} words in total. "
+            "Also produce 10-14 visual stock-video search phrases "
+            "(2-4 words each, concrete subjects/actions a stock site "
+            "like Pexels would return vertical b-roll for), ordered by "
+            "their appearance in the script. "
             "Respond ONLY with JSON: "
-            f'{{"title": "<short punchy title>", "lines": ["...", ...]}} with '
-            f"exactly {max_lines} short spoken lines (1-12 words each). "
+            f'{{"title": "<short punchy title>", '
+            f'"lines": ["...", ...], '
+            f'"keywords": ["...", ...]}} with '
+            f"exactly {max_lines} short spoken lines (1-12 words each) "
+            "and 10-14 keywords. "
             "The last line must be a punchline."
         )
         payload = {
@@ -128,7 +135,13 @@ class OllamaProvider(BaseLLMProvider):
         lines = [str(l).strip() for l in parsed.get("lines", []) if str(l).strip()]
         if not lines:
             raise ValueError("Ollama response contained no usable lines")
+        keywords = [
+            str(k).strip().lower()
+            for k in parsed.get("keywords", [])
+            if str(k).strip()
+        ]
         return GeneratedScript(
             title=str(parsed.get("title") or f"the {topic} take"),
             lines=lines[:max_lines],
+            keywords=list(dict.fromkeys(keywords)),
         )
