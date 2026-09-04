@@ -4,7 +4,7 @@
 //
 // Two tabs:
 //  1. "Presets" - the bundled gameplay loop catalog.
-//  2. "Stock" - one clear action: "Generate Stock Montage" fetches
+//  2. "Stock" - one clear action: "Fetch assets" queries
 //     1-3s vertical clips matching the script's keywords and duration
 //     (Pexels / Pixabay via the vault or server keys) and confirms the
 //     background on its own, unlocking Preview & Export. A compact
@@ -377,10 +377,10 @@ function StockTab() {
 						<Wand2 className="size-4" />
 					)}
 					{building
-						? 'Selecting clips...'
+						? 'Downloading assets...'
 						: stockClips.length > 0
-							? 'Regenerate Stock Montage'
-							: 'Generate Stock Montage'}
+							? 'Refetch assets'
+							: 'Fetch assets'}
 				</Button>
 			</div>
 

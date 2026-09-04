@@ -1,6 +1,6 @@
 'use client';
 
-// Studio top bar: brand, stepwise mode toggle, step indicator, vault access.
+// Studio top bar: brand, stepwise mode toggle, vault access.
 
 import {
 	Flame,
@@ -14,12 +14,11 @@ import { ApiKeysSheet } from '@/components/studio/settings-drawer';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useCredentialsStore } from '@/store/credentials';
-import { STUDIO_STEPS, studioStage, usePipelineStore } from '@/store/pipeline';
+import { usePipelineStore } from '@/store/pipeline';
 
 export function StudioHeader() {
 	const stepwise = usePipelineStore((s) => s.stepwise);
 	const setStepwise = usePipelineStore((s) => s.setStepwise);
-	const stage = usePipelineStore((s) => studioStage(s));
 
 	const vaultStatus = useCredentialsStore((s) => s.status);
 	const openSettings = useCredentialsStore((s) => s.openSettings);
@@ -50,18 +49,6 @@ export function StudioHeader() {
 			</div>
 
 			<div className="flex items-center gap-3">
-				{/* Wizard step indicator */}
-				{stepwise && (
-					<span
-						className="hidden text-xs text-zinc-500 md:flex"
-						data-testid="stepwise-indicator"
-					>
-						<span className="font-medium text-zinc-200">Step {stage}/5</span>
-						<span className="mx-2 text-zinc-700">·</span>
-						{STUDIO_STEPS[stage - 1].title}
-					</span>
-				)}
-
 				{/* Canvas mode toggle */}
 				<div
 					className="flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.03] p-0.5"

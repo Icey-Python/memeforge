@@ -588,7 +588,7 @@ export function ApiKeysSheet() {
 				className="w-full overflow-y-auto p-0 sm:max-w-md"
 				data-testid="api-keys-drawer"
 			>
-				<SheetHeader className="border-b border-white/[0.06]">
+				<SheetHeader className="border-b border-white/[0.06] px-6 pt-6 pb-4">
 					<SheetTitle className="flex items-center gap-2 text-base">
 						<KeyRound className="size-4" /> API Keys
 					</SheetTitle>
@@ -596,7 +596,7 @@ export function ApiKeysSheet() {
 						Encrypted in this browser. Keys never leave your machine.
 					</SheetDescription>
 				</SheetHeader>
-				<div className="space-y-4 p-4">
+				<div className="space-y-4 p-6 pt-5">
 					{status === 'uninitialized' && <CreateVaultSection />}
 					{status === 'locked' && <UnlockSection />}
 					{status === 'unlocked' && (
