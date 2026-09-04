@@ -453,6 +453,16 @@ function SectionCard({
 	);
 }
 
+// --- Manage-keys view (unlocked vault) -----------------------------------------
+
+type SettingsTab = 'llm' | 'tts' | 'stock';
+
+const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
+	{ id: 'llm', label: 'LLM' },
+	{ id: 'tts', label: 'Voice / TTS' },
+	{ id: 'stock', label: 'Stock Video' }
+];
+
 function ManageKeysSection({
 	caps
 }: {
@@ -460,56 +470,72 @@ function ManageKeysSection({
 }) {
 	const lock = useCredentialsStore((s) => s.lock);
 	const isSet = (flag: string) => Boolean(caps?.[flag]);
+	const [tab, setTab] = useState<SettingsTab>('llm');
 
 	return (
 		<div className="space-y-4">
 			<div
-				className="flex items-center gap-2 rounded-xl border border-orange-500/25 bg-orange-500/5 p-2.5 text-xs text-orange-300"
-				data-testid="vault-unlocked-banner"
+				className="flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.03] p-0.5"
+				role="tablist"
+				aria-label="API key categories"
+				data-testid="vault-tabs"
 			>
-				<LockOpen className="size-4 shrink-0" />
-				Vault unlocked. Keys apply to this session and re-encrypt on save.
+				{SETTINGS_TABS.map((t) => (
+					<button
+						key={t.id}
+						type="button"
+						role="tab"
+						aria-selected={tab === t.id}
+						onClick={() => setTab(t.id)}
+						data-testid={`vault-tab-${t.id}`}
+						className={cn(
+							'flex-1 rounded-full px-2 py-1.5 text-xs font-medium transition-all active:scale-[0.98]',
+							tab === t.id
+								? 'bg-orange-500 text-zinc-950'
+								: 'text-zinc-400 hover:text-zinc-100'
+						)}
+					>
+						{t.label}
+					</button>
+				))}
 			</div>
 
-			<SectionCard title="LLM Keys">
-				<KeyFieldInput
-					def={LLM_FIELDS[0]}
-					serverDefault={isSet(LLM_FIELDS[0].serverFlag)}
-				/>
-				<KeyFieldInput
-					def={LLM_FIELDS[1]}
-					serverDefault={isSet(LLM_FIELDS[1].serverFlag)}
-				/>
-				<KeyFieldInput
-					def={LLM_FIELDS[2]}
-					serverDefault={isSet(LLM_FIELDS[2].serverFlag)}
-				/>
-				<KeyFieldInput
-					def={LLM_FIELDS[3]}
-					serverDefault={isSet(LLM_FIELDS[3].serverFlag)}
-				/>
-				<KeyFieldInput def={BASE_URL_FIELD} serverDefault={false} />
-			</SectionCard>
+			{tab === 'llm' && (
+				<SectionCard title="Script generation">
+					{LLM_FIELDS.map((def) => (
+						<KeyFieldInput
+							key={def.field}
+							def={def}
+							serverDefault={isSet(def.serverFlag)}
+						/>
+					))}
+					<KeyFieldInput def={BASE_URL_FIELD} serverDefault={false} />
+				</SectionCard>
+			)}
 
-			<SectionCard title="TTS Keys">
-				{TTS_FIELDS.map((def) => (
-					<KeyFieldInput
-						key={def.field}
-						def={def}
-						serverDefault={isSet(def.serverFlag)}
-					/>
-				))}
-			</SectionCard>
+			{tab === 'tts' && (
+				<SectionCard title="Voiceovers">
+					{TTS_FIELDS.map((def) => (
+						<KeyFieldInput
+							key={def.field}
+							def={def}
+							serverDefault={isSet(def.serverFlag)}
+						/>
+					))}
+				</SectionCard>
+			)}
 
-			<SectionCard title="Stock Video Keys">
-				{STOCK_FIELDS.map((def) => (
-					<KeyFieldInput
-						key={def.field}
-						def={def}
-						serverDefault={isSet(def.serverFlag)}
-					/>
-				))}
-			</SectionCard>
+			{tab === 'stock' && (
+				<SectionCard title="Background clips">
+					{STOCK_FIELDS.map((def) => (
+						<KeyFieldInput
+							key={def.field}
+							def={def}
+							serverDefault={isSet(def.serverFlag)}
+						/>
+					))}
+				</SectionCard>
+			)}
 
 			<div className="flex gap-2">
 				<Button

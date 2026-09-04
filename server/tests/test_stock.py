@@ -124,17 +124,47 @@ def test_stock_search_pexels_parses_live_payload(monkeypatch):
 
     resp = client.get("/api/v1/stock/search", params={"q": "noodles"})
     assert resp.status_code == 200
-    videos = [v for v in resp.json()["videos"] if not v["is_demo"]]
-    assert len(videos) == 1
-    v = videos[0]
+    body = resp.json()
+    # Pixabay stays unkeyed in this test, but a live Pexels key wins:
+    # no demo clips mixed in and no demo notice.
+    assert len(body["videos"]) == 1
+    v = body["videos"][0]
     assert v["id"] == "123"
     assert v["provider"] == "pexels"
     assert v["video_url"] == "https://cdn/x-port.mp4"
     assert v["duration_s"] == 9.0
     assert v["author"] == "Ada"
     assert v["thumbnail_url"].endswith("pic.jpg")
-    # Pixabay stays unkeyed in this test → demo notice mentions only it.
-    assert "PIXABAY_API_KEY" in resp.json()["notice"]
+    assert body["notice"] is None
+
+
+def test_stock_search_all_keyed_errors_demo_notice(monkeypatch):
+    """Every keyed provider erroring degrades to demo clips + a notice."""
+    from app.providers.stock import pexels as pexels_module
+    from app.providers.stock import pixabay as pixabay_module
+
+    monkeypatch.setattr(settings, "PEXELS_API_KEY", "test-key")
+    monkeypatch.setattr(settings, "PIXABAY_API_KEY", "test-key")
+
+    class FailingClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, params=None, headers=None):
+            raise httpx.ConnectError("boom")
+
+    monkeypatch.setattr(pexels_module.httpx, "AsyncClient", FailingClient)
+    monkeypatch.setattr(pixabay_module.httpx, "AsyncClient", FailingClient)
+
+    resp = client.get("/api/v1/stock/search", params={"q": "noodles"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["videos"]) > 0
+    assert all(v["is_demo"] for v in body["videos"])
+    assert "API error" in body["notice"]
 
 
 def test_stock_search_pixabay_parses_live_payload(monkeypatch):
@@ -872,6 +902,52 @@ def test_auto_select_unkeyed_demo_notice(monkeypatch):
     assert "PEXELS_API_KEY" in body["notice"]
     providers = {p["id"]: p["keyed"] for p in body["providers"]}
     assert providers == {"pexels": False, "pixabay": False}
+
+
+def test_auto_select_client_key_no_demo_notice(monkeypatch):
+    """A valid vault key wins: no demo clips in the montage, no notice.
+
+    Regression test: with a live Pexels key and no Pixabay key, the
+    montage used to surface the "add PIXABAY_API_KEY" banner even
+    though real Pexels clips were fetched.
+    """
+    from app.providers.stock import pexels as pexels_module
+
+    monkeypatch.setattr(settings, "PEXELS_API_KEY", "")
+    monkeypatch.setattr(settings, "PIXABAY_API_KEY", "")
+    payload = {
+        "videos": [
+            {
+                "id": vid,
+                "duration": 12,
+                "image": f"https://img/{vid}.jpg",
+                "user": {"name": "Ann"},
+                "video_files": [
+                    {"link": f"https://cdn/{vid}.mp4", "width": 1080,
+                     "height": 1920, "quality": "hd"}
+                ],
+            }
+            for vid in (101, 102, 103)
+        ]
+    }
+    factory = _make_fake_client(
+        pexels_module, payload, "api.pexels.com/videos/search"
+    )
+    monkeypatch.setattr(pexels_module.httpx, "AsyncClient", factory)
+    resp = client.post(
+        "/api/v1/stock/auto-select",
+        json={
+            "keywords": ["noodles", "city night", "kitchen"],
+            "duration_s": 9.0,
+            "segment_s": 3.0,
+            "pexels_api_key": "vault-pexels",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["notice"] is None
+    assert len(body["clips"]) == 3
+    assert all(c["provider"] == "pexels" for c in body["clips"])
 
 
 def test_auto_select_rejects_empty_request():

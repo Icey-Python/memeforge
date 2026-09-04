@@ -1,35 +1,22 @@
 'use client';
 
-// Studio top bar: brand, stepwise mode toggle, step indicator, backend
-// health, vault access.
+// Studio top bar: brand, stepwise mode toggle, step indicator, vault access.
 
-import { useQuery } from '@tanstack/react-query';
 import {
 	Flame,
 	Footprints,
 	KeyRound,
 	LayoutGrid,
-	Loader2,
 	LockOpen
 } from 'lucide-react';
 import Link from 'next/link';
 import { ApiKeysSheet } from '@/components/studio/settings-drawer';
 import { Button } from '@/components/ui/button';
-import { MemeforgeAPI } from '@/lib/memeforge';
 import { cn } from '@/lib/utils';
 import { useCredentialsStore } from '@/store/credentials';
 import { STUDIO_STEPS, studioStage, usePipelineStore } from '@/store/pipeline';
 
 export function StudioHeader() {
-	const { data: health, isLoading } = useQuery({
-		queryKey: ['health'],
-		queryFn: MemeforgeAPI.health,
-		retry: false,
-		refetchInterval: 30_000
-	});
-
-	const online = health?.status === 'ok';
-
 	const stepwise = usePipelineStore((s) => s.stepwise);
 	const setStepwise = usePipelineStore((s) => s.setStepwise);
 	const stage = usePipelineStore((s) => studioStage(s));
@@ -116,33 +103,6 @@ export function StudioHeader() {
 					)}
 					<span className="hidden sm:inline">Keys</span>
 				</Button>
-
-				{/* Backend reachability: the one semantic status dot. */}
-				{isLoading ? (
-					<Loader2 className="size-3.5 animate-spin text-zinc-600" />
-				) : (
-					<span
-						className={cn(
-							'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium',
-							online
-								? 'bg-emerald-500/10 text-emerald-400'
-								: 'bg-amber-500/10 text-amber-400'
-						)}
-						title={
-							online
-								? 'FastAPI backend online'
-								: 'Backend offline, start it with: cd server && uvicorn app.main:app --reload'
-						}
-					>
-						<span
-							className={cn(
-								'size-1.5 rounded-full',
-								online ? 'bg-emerald-400' : 'bg-amber-400'
-							)}
-						/>
-						{online ? 'API online' : 'API offline'}
-					</span>
-				)}
 			</div>
 			<ApiKeysSheet />
 		</header>

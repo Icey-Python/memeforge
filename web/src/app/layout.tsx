@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 		template: '%s | Memeforge'
 	},
 	description:
-		'AI vertical video generator: scripts via LLM connectors, free TikTok meme + neural voices, and vertical 1080x1920 full-screen renders.',
+		'AI vertical video studio: scroll-stopping scripts, kinetic captions synced word by word, neural voiceovers, and fast-cutting stock montages rendered in 1080x1920.',
 	keywords: [
 		'video generator',
 		'short-form video',
@@ -46,18 +46,26 @@ export default function RootLayout({
 		<html lang="en" className="dark">
 			<body className={`${dmSans.className} antialiased`}>
 				<QueryProvider>{children}</QueryProvider>
+				{/* Sleek dark toasts: zinc-900 surface, clean white text and
+				 * neutral icons — one minimalist look for every toast type. */}
 				<Toaster
 					position="top-center"
-					richColors
+					theme="dark"
 					icons={{
-						success: <Check className="size-5 text-primary" />,
-						error: <X className="size-5 text-primary" />,
-						info: <Info className="size-5 text-primary" />,
-						warning: <TriangleAlert className="text-primary size-5" />,
-						loading: <Loader2 className="text-primary size-5 animate-spin" />
+						success: <Check className="size-5 text-zinc-100" />,
+						error: <X className="size-5 text-zinc-100" />,
+						info: <Info className="size-5 text-zinc-100" />,
+						warning: <TriangleAlert className="size-5 text-zinc-100" />,
+						loading: <Loader2 className="size-5 animate-spin text-zinc-100" />
 					}}
 					toastOptions={{
-						duration: 2000
+						duration: 2000,
+						style: {
+							background: '#18181b',
+							border: '1px solid rgba(255, 255, 255, 0.08)',
+							color: '#fafafa',
+							borderRadius: '9999px'
+						}
 					}}
 				/>
 			</body>

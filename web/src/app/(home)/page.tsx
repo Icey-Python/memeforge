@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, AudioLines, Bot, Film, Gamepad2 } from 'lucide-react';
+import { ArrowRight, AudioLines, Bot, Captions, Gamepad2 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
@@ -8,7 +8,7 @@ const STEPS = [
 	{
 		icon: Bot,
 		title: 'Connect a model',
-		body: 'OpenAI-compatible clouds or local Ollama. Bring your own brain.'
+		body: 'Any major cloud model or a local one. Bring your own brain.'
 	},
 	{
 		icon: AudioLines,
@@ -18,12 +18,12 @@ const STEPS = [
 	{
 		icon: Gamepad2,
 		title: 'Choose a background',
-		body: 'Preset gameplay loops or auto-selected stock clips.'
+		body: 'Preset gameplay loops or an auto-built, fast-cutting stock montage.'
 	},
 	{
-		icon: Film,
+		icon: Captions,
 		title: 'Forge the short',
-		body: 'Vertical 1080×1920 with an optional hook card and captions.'
+		body: 'Vertical 1080×1920 with kinetic captions synced to every word.'
 	}
 ];
 
@@ -32,7 +32,7 @@ export default function Home() {
 		<main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-6 py-16">
 			<div className="relative z-10 flex max-w-4xl flex-col items-center text-center">
 				<span className="mb-6 rounded-full border border-orange-500/25 bg-orange-500/10 px-4 py-1.5 text-[13px] text-orange-300">
-					AI vertical video generation
+					AI vertical video studio
 				</span>
 
 				<h1 className="text-balance text-5xl font-bold leading-[1.05] tracking-tight md:text-6xl">
@@ -41,8 +41,9 @@ export default function Home() {
 				</h1>
 
 				<p className="mt-6 max-w-xl text-balance text-lg leading-relaxed text-zinc-400">
-					Wire a model, a voice, and background clips into one pipeline. Renders
-					vertical 1080×1920 shorts with captions.
+					Pick a model, a voice, and a look. Memeforge writes the script, cuts a
+					fast multi-clip montage, times kinetic captions to every word, and
+					renders a vertical 1080×1920 short.
 				</p>
 
 				<div className="mt-10 flex flex-wrap items-center justify-center gap-4">
@@ -69,7 +70,7 @@ export default function Home() {
 				</div>
 
 				<p className="mt-16 text-xs text-zinc-600">
-					Runs entirely on your machine · Next.js + FastAPI + ffmpeg
+					Runs entirely on your machine
 				</p>
 			</div>
 		</main>
