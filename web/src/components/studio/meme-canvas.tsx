@@ -93,6 +93,9 @@ const NODE_STAGE: Record<string, number> = {
 
 // --- Initial graph -----------------------------------------------------------
 
+// Column pitch: nodes are 340px wide (gameplay 400px), so a 480px column
+// stride leaves a 140px breathing gap between neighbours; the preview
+// column sits at 2460 so the 400px gameplay node never touches it.
 function initialNodes(): Node[] {
 	return [
 		{
@@ -105,35 +108,35 @@ function initialNodes(): Node[] {
 		{
 			id: 'topic',
 			type: 'topic',
-			position: { x: 400, y: 0 },
+			position: { x: 480, y: 0 },
 			data: {},
 			className: 'node-reveal'
 		},
 		{
 			id: 'script',
 			type: 'script',
-			position: { x: 800, y: 0 },
+			position: { x: 960, y: 0 },
 			data: {},
 			className: 'node-reveal'
 		},
 		{
 			id: 'voiceover',
 			type: 'voiceover',
-			position: { x: 1200, y: 0 },
+			position: { x: 1440, y: 0 },
 			data: {},
 			className: 'node-reveal'
 		},
 		{
 			id: 'gameplay',
 			type: 'gameplay',
-			position: { x: 1600, y: 0 },
+			position: { x: 1920, y: 0 },
 			data: {},
 			className: 'node-reveal'
 		},
 		{
 			id: 'preview',
 			type: 'preview',
-			position: { x: 2000, y: 140 },
+			position: { x: 2460, y: 140 },
 			data: {},
 			className: 'node-reveal'
 		}
