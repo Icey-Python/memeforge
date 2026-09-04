@@ -102,6 +102,10 @@ class ScriptResponse(BaseModel):
     provider: str
     model: Optional[str] = None
     lines: List[ScriptLine]
+    # Visual stock-video search phrases tied to the script content
+    # (10+ by default) — feed the auto-selected stock montage without a
+    # second LLM round-trip. Editable in the studio script node.
+    keywords: List[str] = []
     generated_at: datetime
 
 
@@ -178,6 +182,13 @@ class StockClipRef(BaseModel):
     url: str = Field(..., description="Direct download URL of the clip")
     duration_s: float = Field(..., ge=0.1, description="Clip duration in seconds")
     label: str = Field(default="", description="Display title (thumbnail tooltip)")
+    keyword: Optional[str] = Field(
+        default=None,
+        description=(
+            "The script keyword that pulled this clip (auto-selected "
+            "montages; powers per-clip refresh/swap in the studio)"
+        ),
+    )
 
 
 class RenderRequest(BaseModel):
@@ -202,6 +213,14 @@ class RenderRequest(BaseModel):
             "Stock clips (Pexels / Pixabay) stitched into the background; "
             "when set, overrides gameplay_id. Multiple clips are "
             "concatenated with cuts to cover the voiceover duration."
+        ),
+    )
+    stock_montage: bool = Field(
+        default=False,
+        description=(
+            "Fast-switching montage: cut each clip to a 1.5-3s segment "
+            "(cycling through the picks) instead of playing them in full. "
+            "Auto-selected keyword montages turn this on."
         ),
     )
     card_style: CardStyle = Field(
@@ -322,3 +341,69 @@ class KeywordExtractResponse(BaseModel):
     source: str = Field(
         ..., description="'llm' when the model produced the queries, else 'heuristic'"
     )
+
+
+# --- Stock montage auto-selection --------------------------------------------
+
+
+class StockAutoSelectRequest(BaseModel):
+    """Auto-build a fast-switching stock montage from script keywords."""
+
+    keywords: List[str] = Field(
+        default=[],
+        description=(
+            "Visual search phrases tied to the script (the keyword set "
+            "that ships with /generate-script). Empty + a script falls "
+            "back to the offline heuristic extractor."
+        ),
+    )
+    script: List[str] = Field(
+        default=[],
+        description="Script lines (keyword + duration fallback source)",
+    )
+    duration_s: Optional[float] = Field(
+        default=None,
+        gt=0,
+        le=600,
+        description=(
+            "Target montage duration in seconds; defaults to a word-count "
+            "estimate from the script (~2.4 words/sec of speech)"
+        ),
+    )
+    segment_s: float = Field(
+        default=2.25,
+        ge=1.0,
+        le=4.0,
+        description="Seconds each clip plays before the cut (1.5-3 typical)",
+    )
+    seed: Optional[int] = Field(
+        default=None,
+        description=(
+            "Shuffle seed — send a fresh value to refresh/shuffle the picks"
+        ),
+    )
+    exclude: List[StockClipRef] = Field(
+        default=[],
+        description="Clips to skip (used by the per-clip swap flow)",
+    )
+    # Client-supplied stock keys (studio key vault); headers win.
+    pexels_api_key: Optional[str] = None
+    pixabay_api_key: Optional[str] = None
+
+
+class StockAutoSelectResponse(BaseModel):
+    """A planned, ordered clip sequence for a fast-switching montage."""
+
+    clips: List[StockClipRef] = Field(
+        ..., description="Ordered clips (round-robin across the keywords)"
+    )
+    keywords: List[str] = Field(
+        ..., description="The keyword set actually used for the searches"
+    )
+    duration_s: float = Field(..., description="Montage duration the plan targets")
+    segment_s: float = Field(..., description="Seconds per clip in the montage")
+    segments_needed: int = Field(
+        ..., description="Clip segments covering the duration (clips may repeat)"
+    )
+    notice: Optional[str] = None
+    providers: List[StockProviderInfo] = []

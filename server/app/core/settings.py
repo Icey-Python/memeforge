@@ -107,6 +107,11 @@ STOCK_MAX_CLIP_BYTES = int(
 )
 # Max stock clips stitched into one background.
 STOCK_MAX_CLIPS = int(os.getenv("MEMEFORGE_STOCK_MAX_CLIPS", "12"))
+# Fast-switching montages cut each clip to 1.5-3s, so they carry far
+# more unique clips than an ordered full-length playlist.
+STOCK_MAX_MONTAGE_CLIPS = int(
+    os.getenv("MEMEFORGE_STOCK_MAX_MONTAGE_CLIPS", "36")
+)
 
 # --- Rendering ------------------------------------------------------------
 

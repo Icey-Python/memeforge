@@ -67,6 +67,110 @@ def test_generate_script_rejects_bad_duration_target():
     assert resp.status_code == 422
 
 
+# --- Script keywords (stock montage search set) ------------------------------
+
+
+def test_generate_script_returns_keywords():
+    """The mock connector ships a 10+ visual keyword set with the script."""
+    resp = client.post(
+        "/api/v1/generate-script",
+        json={"topic": "elden ring boss fights", "provider": "mock"},
+    )
+    assert resp.status_code == 200
+    keywords = resp.json()["keywords"]
+    assert len(keywords) >= 10
+    assert all(isinstance(k, str) and k.strip() for k in keywords)
+    assert len(set(keywords)) == len(keywords)  # deduped
+    # Deterministic per topic (same request → same set).
+    again = client.post(
+        "/api/v1/generate-script",
+        json={"topic": "elden ring boss fights", "provider": "mock"},
+    ).json()["keywords"]
+    assert again == keywords
+
+
+def _fake_openai_chat(monkeypatch, content_json: str):
+    """Point the OpenAI-compatible connector at a canned chat response."""
+    from app.providers.llm import openai_compatible as openai_module
+
+    class FakeResp:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [{"message": {"content": content_json}}]
+            }
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            return None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, json=None, headers=None):
+            assert url.endswith("/chat/completions")
+            return FakeResp()
+
+    monkeypatch.setattr(openai_module.httpx, "AsyncClient", FakeClient)
+
+
+def test_generate_script_llm_keywords_pass_through(monkeypatch):
+    """Connector-provided keywords flow through untouched (10+)."""
+    _fake_openai_chat(
+        monkeypatch,
+        '{"title": "the noodle take", "lines": ["boil the noodles"], '
+        '"keywords": ["boiling noodles", "chef cooking pasta", '
+        '"asian street food", "noodle broth", "steam kitchen", '
+        '"chopping vegetables", "night market", "ramen bowl close up", '
+        '"pouring sauce", "noodle factory", "eating noodles", '
+        '"chopsticks detail"]}',
+    )
+    resp = client.post(
+        "/api/v1/generate-script",
+        json={
+            "topic": "instant noodles",
+            "provider": "openai",
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "k",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["keywords"][0] == "boiling noodles"
+    assert len(body["keywords"]) == 12
+
+
+def test_generate_script_pads_missing_keywords_via_heuristic(monkeypatch):
+    """A model that returns no keywords still gets a 10+ set (offline
+    heuristic pads from the script text + topic)."""
+    _fake_openai_chat(
+        monkeypatch,
+        '{"title": "the pizza take", "lines": ["pizza pizza pizza", '
+        '"the oven bakes the pizza dough", "pizza night is every night"]}',
+    )
+    resp = client.post(
+        "/api/v1/generate-script",
+        json={
+            "topic": "pizza",
+            "provider": "openai",
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "k",
+        },
+    )
+    assert resp.status_code == 200
+    keywords = resp.json()["keywords"]
+    assert len(keywords) >= 10
+    # The script's dominant word surfaces organically.
+    assert any("pizza" in k for k in keywords)
+
+
 def test_models_catalog():
     resp = client.get("/api/v1/models")
     assert resp.status_code == 200

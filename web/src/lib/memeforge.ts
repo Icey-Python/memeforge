@@ -9,6 +9,7 @@ import type {
 	ModelDiscoveryResult,
 	RenderJobInfo,
 	ScriptResponse,
+	StockAutoSelectResponse,
 	StockClipSelection,
 	StockCredentialParams,
 	StockSearchResponse,
@@ -111,6 +112,25 @@ export const MemeforgeAPI = {
 		return data;
 	},
 
+	/** Auto-build a fast-switching montage: round-robin stock searches over
+	 * the script's keyword set, sized to the script duration. Each clip
+	 * plays a ~1.5-3s cut in the render. A fresh seed reshuffles the picks;
+	 * `exclude` powers the per-clip swap. Vault keys ride in the body
+	 * (same priority as /stock/search: headers > body > server .env). */
+	async autoSelectStock(
+		payload: {
+			keywords?: string[];
+			script?: string[];
+			duration_s?: number;
+			segment_s?: number;
+			seed?: number;
+			exclude?: StockClipSelection[];
+		} & StockCredentialParams
+	): Promise<StockAutoSelectResponse> {
+		const { data } = await apiBase.post('/stock/auto-select', payload);
+		return data;
+	},
+
 	async startRender(
 		payload: {
 			topic: string;
@@ -122,6 +142,8 @@ export const MemeforgeAPI = {
 			gameplay_id?: string;
 			/** Stock clips stitched into the background (stock mode). */
 			stock_clips?: StockClipSelection[];
+			/** Fast-switching cuts (~1.5-3s per clip) on the stock picks. */
+			stock_montage?: boolean;
 			/** Top card overlay: 'hook' (headline), 'quote', or 'none'. */
 			card_style?: 'hook' | 'quote' | 'none';
 			sfx_on_punchlines: boolean;

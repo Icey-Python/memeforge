@@ -24,12 +24,19 @@ async def list_gameplay_clips():
 
 def _validate_stock_clips(request: RenderRequest) -> None:
     """Stock-clip payload guards (count + provider allowlist)."""
-    if len(request.stock_clips) > settings.STOCK_MAX_CLIPS:
+    # Montages play 1.5-3s cuts, so they legitimately carry many more
+    # clips than an ordered playlist of full-length picks.
+    max_clips = (
+        settings.STOCK_MAX_MONTAGE_CLIPS
+        if request.stock_montage
+        else settings.STOCK_MAX_CLIPS
+    )
+    if len(request.stock_clips) > max_clips:
         raise HTTPException(
             400,
             detail=(
                 f"Too many stock clips ({len(request.stock_clips)}); "
-                f"the limit is {settings.STOCK_MAX_CLIPS}."
+                f"the limit is {max_clips}."
             ),
         )
     valid_providers = {"pexels", "pixabay"}

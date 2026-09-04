@@ -118,8 +118,13 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             "Reels). Target "
             f"{duration_target} seconds of spoken speech — "
             f"roughly {w_min}-{w_max} words in total. "
+            "Also produce 10-14 visual stock-video search phrases "
+            "(2-4 words each, concrete subjects/actions a stock site "
+            "like Pexels would return vertical b-roll for), ordered by "
+            "their appearance in the script. "
             f'Output JSON: {{"title": string, "lines": '
-            f"string[{max_lines}]}}. "
+            f"string[{max_lines}], "
+            '"keywords": string[10..14]}. '
             "Short spoken lines, 1-12 words each, last line is "
             "a punchline. No markdown."
         )
@@ -129,7 +134,13 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         lines: List[str] = [str(line).strip() for line in parsed.get("lines", []) if str(line).strip()]
         if not lines:
             raise ValueError("LLM response contained no usable lines")
+        keywords = [
+            str(k).strip().lower()
+            for k in parsed.get("keywords", [])
+            if str(k).strip()
+        ]
         return GeneratedScript(
             title=str(parsed.get("title") or f"the {topic} take"),
             lines=lines[:max_lines],
+            keywords=list(dict.fromkeys(keywords)),
         )
