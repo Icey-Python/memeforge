@@ -1,0 +1,68 @@
+# ---------------------------------------------------------------------------
+# memeforge — full stack, production mode.
+#
+#   docker compose up --build
+#
+# Dev stack (hot reload + source mounts): docker-compose.dev.yml
+# ---------------------------------------------------------------------------
+
+name: memeforge
+
+services:
+  server:
+    build:
+      context: ./server
+    image: memeforge-server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    # Server-side provider keys: copy server/.env.example to server/.env
+    # (loaded here automatically) or pass env vars with `docker compose run`.
+    env_file:
+      - path: ./server/.env
+        required: false
+    environment:
+      # Extra allowed origins for browsers NOT on localhost (comma-separated).
+      # localhost/127.0.0.1 origins are always allowed.
+      MEMEFORGE_CORS_ORIGINS: ${MEMEFORGE_CORS_ORIGINS:-}
+    volumes:
+      # Rendered videos + TTS previews persist across rebuilds.
+      - memeforge_outputs:/app/outputs
+      # Drop background clips (<id>.mp4) into ./server/assets/gameplay on the
+      # host and they appear in the container without rebuilding.
+      - ./server/assets/gameplay:/app/assets/gameplay:ro
+      # Optional punchline SFX (host-provided, same idea as gameplay).
+      - ./server/assets/sfx:/app/assets/sfx:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  web:
+    build:
+      context: ./web
+      args:
+        # Baked into the client bundle at build time — changing it requires
+        # `docker compose build web`. This is the URL the user's BROWSER uses
+        # to reach the API, so localhost is correct when ports are published.
+        NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://localhost:8000}
+    image: memeforge-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://localhost:8000}
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  memeforge_outputs:

@@ -1,0 +1,33 @@
+# Keep the build context small and secrets/user data out of image layers.
+# Rendered videos are runtime artifacts (named volume), gameplay/SFX clips
+# are user-provided (bind-mounted by compose) — neither belongs in the image.
+
+# Python
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+
+# Runtime artifacts (recreated by the Dockerfile)
+outputs
+
+# User-provided media (mount into the container instead of baking in)
+assets/gameplay/*
+assets/sfx/*
+
+# Env — never bake credentials into images (compose injects them at runtime)
+.env
+.env.*
+!.env.example
+
+# VCS / editor / OS noise
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+*.swp
+
+# Logs
+*.log
