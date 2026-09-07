@@ -1,0 +1,28 @@
+# Keep the build context small and secrets out of image layers.
+node_modules
+.next
+out
+dist
+
+# Env — never bake credentials into images (compose injects them at runtime)
+.env
+.env.*
+!.env.example
+
+# VCS / editor / OS noise
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+*.swp
+
+# Logs & caches
+*.log
+npm-debug.log*
+pnpm-debug.log*
+tsconfig.tsbuildinfo
+
+# Tooling not needed at image build time
+lefthook.yml
+README.md

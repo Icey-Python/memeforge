@@ -40,6 +40,35 @@ pnpm dev
 
 Or run both at once: `./scripts/dev.sh`.
 
+### Docker
+
+The whole stack runs in containers — no local Python/Node/pnpm needed:
+
+```bash
+docker compose up --build                     # production build (server :8000, web :3000)
+docker compose -f docker-compose.dev.yml up --build   # hot-reload dev stack
+```
+
+- **server** — multi-stage image (`server/Dockerfile`, Python 3.11-slim) with
+  `ffmpeg`/`ffprobe` and the DejaVu caption fallback font baked in. Rendered
+  videos persist in the `memeforge_outputs` named volume; background clips
+  dropped into `server/assets/gameplay/` and SFX into `server/assets/sfx/` on
+  the host are visible to the container via read-only bind mounts. Server-side
+  API keys: copy `server/.env.example` to `server/.env` (compose loads it
+  automatically) or export them before `docker compose up`.
+- **web** — multi-stage Next.js image (`web/Dockerfile`) using the standalone
+  server output. `NEXT_PUBLIC_SERVER_URL` is baked at build time (defaults to
+  `http://localhost:8000`, the URL the browser uses); override with
+  `NEXT_PUBLIC_SERVER_URL=https://api.example.com docker compose build web`.
+- **dev stack** — sources are bind-mounted (`./server` → `/app`, `./web` → `/app`),
+  uvicorn runs `--reload` and web runs `next dev`; container-native
+  `node_modules` and `.next` live in named volumes. After changing
+  `web/package.json`, refresh them with
+  `docker compose -f docker-compose.dev.yml run --rm web pnpm install --ignore-scripts`. If
+  hot reload misses host edits, set `WATCHFILES_FORCE_POLLING=1` before `up`.
+- Healthchecks gate startup (`GET /health` for the server, `GET /` for web).
+  Verify ffmpeg inside the container with `docker compose exec server ffmpeg -version`.
+
 Zero-config demo: the default **Mock** LLM provider works offline, and
 **edge-tts** needs no API key — the whole topic → script → voiceover →
 render pipeline runs without any credentials. The **Meme Classic**

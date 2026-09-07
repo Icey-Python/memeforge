@@ -1,0 +1,54 @@
+# ---------------------------------------------------------------------------
+# memeforge — dev stack: hot reload on both sides, source bind-mounted.
+#
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# - server: same production image, command overridden with `uvicorn --reload`;
+#   ./server is bind-mounted to /app, so rendered videos land in
+#   ./server/outputs on the host and server/.env is honored via the mount.
+# - web: ./web -> /app (`next dev` dev target). Container-native node_modules
+#   live in /opt/node_modules so host mounts never shadow them.
+# ---------------------------------------------------------------------------
+
+name: memeforge-dev
+
+services:
+  server:
+    build:
+      context: ./server
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    ports:
+      - "8000:8000"
+    environment:
+      MEMEFORGE_CORS_ORIGINS: ${MEMEFORGE_CORS_ORIGINS:-}
+      # Force polling if hot reload misses host-side edits on some
+      # Docker Desktop / filesystem combinations.
+      WATCHFILES_FORCE_POLLING: ${WATCHFILES_FORCE_POLLING:-0}
+    volumes:
+      - ./server:/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  web:
+    build:
+      context: ./web
+      target: dev
+    image: memeforge-web-dev
+    ports:
+      - "3000:3000"
+    environment:
+      # Read at runtime by `next dev` (no rebuild needed when it changes).
+      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://localhost:8000}
+    volumes:
+      - ./web:/app
+      - web_next:/app/.next
+    depends_on:
+      server:
+        condition: service_healthy
+
+volumes:
+  web_next:

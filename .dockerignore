@@ -1,0 +1,17 @@
+# Safety net for any root-context build (the compose stacks build from
+# ./web and ./server, which use their own .dockerignore files).
+.git
+node_modules
+.next
+out
+dist
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+server/outputs
+.env
+.env.*
+.DS_Store
+*.log
