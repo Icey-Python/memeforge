@@ -124,6 +124,8 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
             elevenlabs_api_key=request.elevenlabs_api_key,
             azure_speech_key=request.azure_speech_key,
             azure_speech_region=request.azure_speech_region,
+            fish_api_key=request.fish_api_key,
+            fish_model=request.fish_model,
         )
 
         line_durations: List[float] = []

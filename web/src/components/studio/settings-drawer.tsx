@@ -110,6 +110,12 @@ const TTS_FIELDS: FieldDef[] = [
 		placeholder: 'eastus',
 		serverFlag: 'tts_azure_region',
 		plaintext: true
+	},
+	{
+		field: 'fishApiKey',
+		label: 'Fish Audio API Key',
+		placeholder: 'fish_...',
+		serverFlag: 'tts_fish'
 	}
 ];
 
