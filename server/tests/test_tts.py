@@ -21,6 +21,7 @@ def test_registry_includes_all_providers():
         "meme_classic",
         "tiktok",
         "google",
+        "fish_audio",
         "azure",
         "elevenlabs",
     }

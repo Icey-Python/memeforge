@@ -23,6 +23,7 @@ export const EMPTY_API_KEYS: ApiKeys = {
 	elevenlabsApiKey: '',
 	azureSpeechKey: '',
 	azureSpeechRegion: '',
+	fishApiKey: '',
 	pexelsApiKey: '',
 	pixabayApiKey: ''
 };
@@ -87,6 +88,11 @@ export function ttsCredentialParams(
 		return {
 			azure_speech_key: keys.azureSpeechKey.trim() || undefined,
 			azure_speech_region: keys.azureSpeechRegion.trim() || undefined
+		};
+	}
+	if (provider === 'fish_audio') {
+		return {
+			fish_api_key: keys.fishApiKey.trim() || undefined
 		};
 	}
 	// Free engines (edge, meme_classic, tiktok, google) need no keys.

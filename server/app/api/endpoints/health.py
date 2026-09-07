@@ -25,6 +25,7 @@ def _key_capabilities() -> dict:
         "tts_elevenlabs": bool(settings.ELEVENLABS_API_KEY),
         "tts_azure": bool(settings.AZURE_SPEECH_KEY),
         "tts_azure_region": bool(settings.AZURE_SPEECH_REGION),
+        "tts_fish": bool(settings.FISH_API_KEY),
     }
 
 

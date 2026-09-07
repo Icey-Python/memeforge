@@ -186,6 +186,12 @@ export const TTS_PROVIDERS: {
 		free: true
 	},
 	{
+		id: 'fish_audio',
+		label: 'Fish Audio',
+		hint: 'Expressive voices, 83 languages',
+		free: false
+	},
+	{
 		id: 'azure',
 		label: 'Azure Speech',
 		hint: 'Paid tier with SLA',
@@ -402,6 +408,89 @@ export const GOOGLE_VOICES: VoiceOption[] = [
 		gender: 'female',
 		tags: ['fallback']
 	}
+];
+
+/** Fish Audio curated voices (mirrors the backend shortlist; the empty
+ * id is the built-in default narrator — no reference_id). Live trending
+ * voices replace these once a Fish key is set. */
+export const FISH_AUDIO_VOICES: VoiceOption[] = [
+	{
+		id: '',
+		label: 'Default narrator',
+		language: 'en',
+		gender: 'unknown',
+		tags: ['narration']
+	},
+	{
+		id: '90e65eaaf50e4470b8e6d43ee6afd7d5',
+		label: 'Smash Bros Announcer',
+		language: 'en',
+		gender: 'male',
+		tags: ['meme', 'character-voice']
+	},
+	{
+		id: 'd13f84b987ad4f22b56d2b47f4eb838e',
+		label: 'Mortal Kombat',
+		language: 'en',
+		gender: 'male',
+		tags: ['meme', 'deep']
+	},
+	{
+		id: '802e3bc2b27e49c2995d23ef70e6ac89',
+		label: 'Energetic Male',
+		language: 'en',
+		gender: 'male',
+		tags: ['meme', 'energetic']
+	},
+	{
+		id: '933563129e564b19a115bedd57b7406a',
+		label: 'Sarah',
+		language: 'en',
+		gender: 'female',
+		tags: ['conversational', 'narration']
+	},
+	{
+		id: '98655a12fa944e26b274c535e5e03842',
+		label: 'E-girl',
+		language: 'en',
+		gender: 'female',
+		tags: ['conversational']
+	},
+	{
+		id: 'd8a1340984ee4b63ad1ffae27a6a4339',
+		label: 'ELITE',
+		language: 'en',
+		gender: 'male',
+		tags: ['narration', 'confident']
+	},
+	{
+		id: '536d3a5e000945adb7038665781a4aca',
+		label: 'Ethan',
+		language: 'en',
+		gender: 'male',
+		tags: ['narration']
+	},
+	{
+		id: 'bf322df2096a46f18c579d0baa36f41d',
+		label: 'Adrian',
+		language: 'en',
+		gender: 'male',
+		tags: ['narration', 'deep']
+	},
+	{
+		id: '35a41c4c9e754e49a124a4bab5aa47e6',
+		label: 'Energetic Crowd',
+		language: 'en',
+		gender: 'unknown',
+		tags: ['meme']
+	}
+];
+
+/** Fish Audio TTS models (sent as fish_model; s2.1-pro-free is the same
+ * model on the zero-cost trial tier). */
+export const FISH_MODELS: { id: string; label: string }[] = [
+	{ id: 's2.1-pro', label: 's2.1-pro (best quality)' },
+	{ id: 's2.1-pro-free', label: 's2.1-pro-free (free trial)' }
 ];
 
 export const TONE_OPTIONS = [

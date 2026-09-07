@@ -5,16 +5,20 @@
 // The free meme-voice engines, Meme Classic (Brian & the classic Polly
 // cast) and TikTok Meme Voices, get their own category list with
 // per-voice preview buttons; edge/azure/google voices are grouped into
-// "meme staples" vs the rest.
+// "meme staples" vs the rest. Fish Audio adds a model picker (pro vs
+// free trial) and a custom voice-id field for marketplace voices.
 
 import { useQuery } from '@tanstack/react-query';
 import type { NodeProps } from '@xyflow/react';
 import { AudioLines, Check, Loader2, Play } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
 	EDGE_VOICES,
+	FISH_AUDIO_VOICES,
+	FISH_MODELS,
 	GOOGLE_VOICES,
 	MEME_CLASSIC_VOICES,
 	TIKTOK_VOICES,
@@ -31,14 +35,16 @@ import { InlineVaultSection } from '../settings-drawer';
 
 // Offline fallback catalogs per provider (used before/without the API):
 // edge + azure share the neural shortlist, tiktok / meme_classic have the
-// meme catalogs, google maps tl codes; elevenlabs lists remotely (empty
-// until an API key is configured server-side).
+// meme catalogs, google maps tl codes, fish_audio carries a curated
+// marketplace shortlist; elevenlabs lists remotely (empty until an API
+// key is configured server-side).
 const OFFLINE_VOICE_FALLBACKS: Partial<Record<TTSProviderId, VoiceOption[]>> = {
 	edge: EDGE_VOICES,
 	azure: EDGE_VOICES,
 	tiktok: TIKTOK_VOICES,
 	meme_classic: MEME_CLASSIC_VOICES,
-	google: GOOGLE_VOICES
+	google: GOOGLE_VOICES,
+	fish_audio: FISH_AUDIO_VOICES
 };
 
 export function VoiceoverNode(_props: NodeProps) {
@@ -46,11 +52,14 @@ export function VoiceoverNode(_props: NodeProps) {
 	const setTtsProvider = usePipelineStore((s) => s.setTtsProvider);
 	const ttsVoice = usePipelineStore((s) => s.ttsVoice);
 	const setTtsVoice = usePipelineStore((s) => s.setTtsVoice);
+	const fishModel = usePipelineStore((s) => s.fishModel);
+	const setFishModel = usePipelineStore((s) => s.setFishModel);
 	const voiceConfirmed = usePipelineStore((s) => s.voiceConfirmed);
 	const confirmVoice = usePipelineStore((s) => s.confirmVoice);
 
-	// Vault-supplied keys (ElevenLabs / Azure) take priority over the
-	// server .env for voice listing, previews, and the final render.
+	// Vault-supplied keys (ElevenLabs / Azure / Fish Audio) take priority
+	// over the server .env for voice listing, previews, and the final
+	// render.
 	const vaultKeys = useCredentialsStore((s) => s.keys);
 	const keyRevision = useCredentialsStore((s) => s.revision);
 	const keyedFlag =
@@ -58,7 +67,9 @@ export function VoiceoverNode(_props: NodeProps) {
 			? Boolean(vaultKeys?.elevenlabsApiKey)
 			: ttsProvider === 'azure'
 				? Boolean(vaultKeys?.azureSpeechKey)
-				: true;
+				: ttsProvider === 'fish_audio'
+					? Boolean(vaultKeys?.fishApiKey)
+					: true;
 	const ttsCreds = () => ttsCredentialParams(ttsProvider, vaultKeys);
 
 	const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
@@ -75,6 +86,7 @@ export function VoiceoverNode(_props: NodeProps) {
 
 	const isTikTok = ttsProvider === 'tiktok';
 	const isMemeClassic = ttsProvider === 'meme_classic';
+	const isFish = ttsProvider === 'fish_audio';
 	// Free meme-voice engines get the featured category list with direct
 	// per-voice previews; Brian leads the Meme Classic cast.
 	const isFeaturedList = isTikTok || isMemeClassic;
@@ -84,6 +96,12 @@ export function VoiceoverNode(_props: NodeProps) {
 			? voices
 			: (OFFLINE_VOICE_FALLBACKS[ttsProvider] ?? []);
 
+	// The custom-id field shows the active voice only when it is not one
+	// of the listed presets (typing there switches to that custom voice).
+	const customVoice = voiceOptions.some((v) => v.id === ttsVoice)
+		? ''
+		: ttsVoice;
+
 	const preview = async (voice: string) => {
 		setPreviewingVoice(voice);
 		setError(null);
@@ -92,6 +110,7 @@ export function VoiceoverNode(_props: NodeProps) {
 				text: 'This is memeforge, baby. Let us cook.',
 				provider: ttsProvider,
 				voice,
+				...(isFish ? { fish_model: fishModel } : {}),
 				...ttsCreds()
 			});
 			setPreviewUrl(mediaUrl(result.audio_url));
@@ -131,10 +150,14 @@ export function VoiceoverNode(_props: NodeProps) {
 			</div>
 
 			{/* Keyed engines: inline vault inputs for the provider's key. */}
-			{(ttsProvider === 'elevenlabs' || ttsProvider === 'azure') && (
+			{(ttsProvider === 'elevenlabs' || ttsProvider === 'azure' || isFish) && (
 				<InlineVaultSection
 					title={
-						ttsProvider === 'elevenlabs' ? 'ElevenLabs key' : 'Azure speech key'
+						ttsProvider === 'elevenlabs'
+							? 'ElevenLabs key'
+							: ttsProvider === 'azure'
+								? 'Azure speech key'
+								: 'Fish Audio key'
 					}
 					compact
 					fields={
@@ -147,23 +170,48 @@ export function VoiceoverNode(_props: NodeProps) {
 										serverFlag: 'tts_elevenlabs'
 									}
 								]
-							: [
-									{
-										field: 'azureSpeechKey',
-										label: 'Azure Speech Key',
-										placeholder: 'subscription key',
-										serverFlag: 'tts_azure'
-									},
-									{
-										field: 'azureSpeechRegion',
-										label: 'Azure Region',
-										placeholder: 'eastus',
-										serverFlag: 'tts_azure_region',
-										plaintext: true
-									}
-								]
+							: ttsProvider === 'azure'
+								? [
+										{
+											field: 'azureSpeechKey',
+											label: 'Azure Speech Key',
+											placeholder: 'subscription key',
+											serverFlag: 'tts_azure'
+										},
+										{
+											field: 'azureSpeechRegion',
+											label: 'Azure Region',
+											placeholder: 'eastus',
+											serverFlag: 'tts_azure_region',
+											plaintext: true
+										}
+									]
+								: [
+										{
+											field: 'fishApiKey',
+											label: 'Fish Audio API Key',
+											placeholder: 'fish_...',
+											serverFlag: 'tts_fish'
+										}
+									]
 					}
 				/>
+			)}
+
+			{/* Fish Audio: model picker (pro model vs zero-cost trial). */}
+			{isFish && (
+				<div className="space-y-1.5">
+					<Label htmlFor="fish-model">Model</Label>
+					<StudioSelect
+						id="fish-model"
+						value={fishModel}
+						onChange={setFishModel}
+						options={FISH_MODELS.map((m) => ({
+							value: m.id,
+							label: m.label
+						}))}
+					/>
+				</div>
 			)}
 
 			<div className="space-y-1.5">
@@ -259,6 +307,26 @@ export function VoiceoverNode(_props: NodeProps) {
 					<p className="text-xs text-zinc-500">
 						Voices appear once a key is set above.
 					</p>
+				)}
+				{isFish && (
+					// Any fish.audio marketplace voice by id (the picker above
+					// covers the curated/live presets).
+					<div className="space-y-1 pt-1">
+						<Label htmlFor="fish-custom-voice">Custom voice ID</Label>
+						<Input
+							id="fish-custom-voice"
+							value={customVoice}
+							onChange={(e) => setTtsVoice(e.target.value.trim())}
+							placeholder="fish.audio voice model id"
+							autoComplete="off"
+							spellCheck={false}
+							className="h-8 text-xs"
+							data-testid="fish-custom-voice"
+						/>
+						<p className="text-[10px] text-zinc-500">
+							Paste any voice id from the fish.audio marketplace.
+						</p>
+					</div>
 				)}
 			</div>
 

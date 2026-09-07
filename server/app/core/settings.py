@@ -88,6 +88,18 @@ ELEVENLABS_DEFAULT_VOICE = os.getenv(
     "ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"
 )
 
+# Fish Audio (fish.audio premium voices; see providers/tts/fish.py)
+FISH_API_KEY = os.getenv("FISH_API_KEY", "")
+# Default reference_id (marketplace voice id); empty -> model default voice
+FISH_DEFAULT_VOICE = os.getenv("FISH_VOICE_ID", "")
+# s2.1-pro | s2.1-pro-free (zero-cost trial) | s2-pro | s1
+FISH_DEFAULT_MODEL = os.getenv("FISH_MODEL", "s2.1-pro")
+FISH_API_BASE = os.getenv("FISH_API_BASE", "https://api.fish.audio")
+# normal (best quality) | balanced (lower latency) | low
+FISH_LATENCY = os.getenv("FISH_LATENCY", "normal")
+# Concurrency cap for Fish requests (free tier: 5 simultaneous).
+FISH_CONCURRENCY = int(os.getenv("FISH_CONCURRENCY", "5"))
+
 # --- Stock video providers (Pexels / Pixabay) --------------------------------
 
 # Free-tier API keys from https://www.pexels.com/api/ and

@@ -4,9 +4,10 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.providers.llm.base import DiscoveredModel
+from app.providers.tts.fish import MODELS as FISH_MODELS
 
 
 # --- Shared enums ---------------------------------------------------------
@@ -23,6 +24,7 @@ class TTSProvider(str, Enum):
     meme_classic = "meme_classic"  # free (Brian & the iconic meme voices)
     tiktok = "tiktok"  # free (classic TikTok voices; auto-fallback when down)
     google = "google"  # free (Google Translate TTS reliability fallback)
+    fish_audio = "fish_audio"  # Fish Audio (paid; s2.1-pro-free trial tier)
     azure = "azure"  # Azure Speech (paid tier)
     elevenlabs = "elevenlabs"
 
@@ -140,6 +142,19 @@ class ModelDiscoveryResponse(BaseModel):
 # --- TTS -------------------------------------------------------------------
 
 
+def _validate_fish_model(value: Optional[str]) -> Optional[str]:
+    """Allowlist Fish Audio models (s2.1-pro, s2.1-pro-free, s2-pro, s1)."""
+    if value is None or not value.strip():
+        return None
+    model = value.strip()
+    if model not in FISH_MODELS:
+        raise ValueError(
+            f"Unknown Fish Audio model '{model}'. "
+            f"Available: {', '.join(FISH_MODELS)}"
+        )
+    return model
+
+
 class TTSRequest(BaseModel):
     text: str = Field(..., max_length=5000)
     provider: TTSProvider = Field(default=TTSProvider.edge)
@@ -162,6 +177,22 @@ class TTSRequest(BaseModel):
         default=None,
         description="Azure Speech region override, e.g. 'eastus'",
     )
+    fish_api_key: Optional[str] = Field(
+        default=None,
+        description="Fish Audio API key override (priority over server .env)",
+    )
+    fish_model: Optional[str] = Field(
+        default=None,
+        description=(
+            "Fish Audio model: s2.1-pro (default), s2.1-pro-free (zero-cost "
+            "trial), s2-pro or s1"
+        ),
+    )
+
+    @field_validator("fish_model")
+    @classmethod
+    def _check_fish_model(cls, value: Optional[str]) -> Optional[str]:
+        return _validate_fish_model(value)
 
 
 class TTSResponse(BaseModel):
@@ -248,6 +279,22 @@ class RenderRequest(BaseModel):
         default=None,
         description="Azure Speech region override, e.g. 'eastus'",
     )
+    fish_api_key: Optional[str] = Field(
+        default=None,
+        description="Fish Audio API key override (priority over server .env)",
+    )
+    fish_model: Optional[str] = Field(
+        default=None,
+        description=(
+            "Fish Audio model: s2.1-pro (default), s2.1-pro-free (zero-cost "
+            "trial), s2-pro or s1"
+        ),
+    )
+
+    @field_validator("fish_model")
+    @classmethod
+    def _check_fish_model(cls, value: Optional[str]) -> Optional[str]:
+        return _validate_fish_model(value)
 
 
 class RenderJob(BaseModel):

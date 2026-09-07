@@ -39,6 +39,8 @@ interface PipelineStore {
 	customScriptText: string;
 	ttsProvider: TTSProviderId;
 	ttsVoice: string;
+	/** Fish Audio model (s2.1-pro | s2.1-pro-free; provider-specific). */
+	fishModel: string;
 	/** Preset gameplay loop id (background mode "preset"). */
 	gameplayId: string;
 	/** Which background tab is active / what the render will use. */
@@ -87,6 +89,8 @@ interface PipelineStore {
 	applyCustomScript: () => void;
 	setTtsProvider: (provider: TTSProviderId) => void;
 	setTtsVoice: (voice: string) => void;
+	/** Pick the Fish Audio model (s2.1-pro / s2.1-pro-free). */
+	setFishModel: (model: string) => void;
 	/** Select a preset gameplay clip (background mode "preset"). */
 	setGameplay: (id: string) => void;
 	/** Switch between the preset loop + stock video background tabs. */
@@ -118,6 +122,8 @@ const VOICE_DEFAULTS: Record<TTSProviderId, string> = {
 	meme_classic: 'Brian',
 	tiktok: 'en_us_002',
 	google: 'en',
+	// Empty id -> Fish Audio's built-in default narrator (no reference_id).
+	fish_audio: '',
 	azure: 'en-US-ChristopherNeural',
 	elevenlabs: '21m00Tcm4TlvDq8ikWAM'
 };
@@ -177,6 +183,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 	customScriptText: '',
 	ttsProvider: 'edge',
 	ttsVoice: VOICE_DEFAULTS.edge,
+	fishModel: 's2.1-pro',
 	gameplayId: 'minecraft-parkour',
 	backgroundMode: 'preset',
 	stockClips: [],
@@ -235,6 +242,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 	setTtsProvider: (provider) =>
 		set({ ttsProvider: provider, ttsVoice: VOICE_DEFAULTS[provider] }),
 	setTtsVoice: (ttsVoice) => set({ ttsVoice }),
+	setFishModel: (fishModel) => set({ fishModel }),
 	setGameplay: (gameplayId) => set({ gameplayId, backgroundMode: 'preset' }),
 	setBackgroundMode: (backgroundMode) => set({ backgroundMode }),
 	toggleStockClip: (clip) =>
@@ -326,6 +334,9 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 				script: s.scriptLines.filter((l) => l.trim().length > 0),
 				tts_provider: s.ttsProvider,
 				tts_voice: s.ttsVoice,
+				// Fish Audio model selection rides the request when Fish is
+				// the engine (ignored by every other provider).
+				...(s.ttsProvider === 'fish_audio' ? { fish_model: s.fishModel } : {}),
 				// Background: stitched stock clips (stock mode) or the preset
 				// gameplay loop — the backend requires exactly one of them.
 				gameplay_id: useStock ? undefined : s.gameplayId,

@@ -19,6 +19,8 @@ def _client_tts_credentials(
     elevenlabs_key_query: Optional[str],
     azure_key_query: Optional[str],
     azure_region_query: Optional[str],
+    fish_key_header: Optional[str] = None,
+    fish_key_query: Optional[str] = None,
 ) -> dict:
     """Merge client-supplied TTS credentials (headers win over query).
 
@@ -31,6 +33,7 @@ def _client_tts_credentials(
         "azure_speech_region": (
             azure_region_header or azure_region_query or None
         ),
+        "fish_api_key": fish_key_header or fish_key_query or None,
     }
 
 
@@ -49,11 +52,17 @@ async def list_voices(
     azure_speech_region: Optional[str] = Query(
         default=None, description="Azure Speech region override"
     ),
+    fish_api_key: Optional[str] = Query(
+        default=None, description="Fish Audio API key override (studio key vault)"
+    ),
     x_elevenlabs_key: Optional[str] = Header(
         default=None, alias="X-Elevenlabs-Key"
     ),
     x_azure_key: Optional[str] = Header(default=None, alias="X-Azure-Key"),
     x_azure_region: Optional[str] = Header(default=None, alias="X-Azure-Region"),
+    x_fish_api_key: Optional[str] = Header(
+        default=None, alias="X-Fish-API-Key"
+    ),
 ):
     """Voice catalog for the frontend voiceover node voice picker.
 
@@ -70,6 +79,8 @@ async def list_voices(
         elevenlabs_api_key,
         azure_speech_key,
         azure_speech_region,
+        x_fish_api_key,
+        fish_api_key,
     )
     try:
         voices = await tts_registry.list_tts_voices(provider.value, **creds)
@@ -100,6 +111,8 @@ async def synthesize_speech(request: TTSRequest):
         elevenlabs_api_key=request.elevenlabs_api_key,
         azure_speech_key=request.azure_speech_key,
         azure_speech_region=request.azure_speech_region,
+        fish_api_key=request.fish_api_key,
+        fish_model=request.fish_model,
     )
     if not provider.is_configured():
         raise HTTPException(

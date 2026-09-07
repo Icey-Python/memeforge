@@ -299,11 +299,13 @@ def test_render_forwards_tts_credentials_to_provider(monkeypatch):
     original = tts_registry_module.get_tts_provider
 
     def spy(name, voice=None, elevenlabs_api_key=None, azure_speech_key=None,
-            azure_speech_region=None):
+            azure_speech_region=None, fish_api_key=None, fish_model=None):
         captured.update(
             elevenlabs=elevenlabs_api_key,
             azure_key=azure_speech_key,
             azure_region=azure_speech_region,
+            fish=fish_api_key,
+            fish_model=fish_model,
         )
         return original(name, voice=voice)
 
@@ -349,6 +351,7 @@ def test_health_reports_server_key_capabilities():
         "tts_elevenlabs",
         "tts_azure",
         "tts_azure_region",
+        "tts_fish",
         "stock_pexels",
         "stock_pixabay",
     ):

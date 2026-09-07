@@ -19,6 +19,7 @@ export type TTSProviderId =
 	| 'meme_classic'
 	| 'tiktok'
 	| 'google'
+	| 'fish_audio'
 	| 'azure'
 	| 'elevenlabs';
 export type RenderJobStatus = 'queued' | 'running' | 'completed' | 'failed';
@@ -182,6 +183,7 @@ export interface ApiKeys {
 	elevenlabsApiKey: string;
 	azureSpeechKey: string;
 	azureSpeechRegion: string;
+	fishApiKey: string;
 	// Stock video
 	pexelsApiKey: string;
 	pixabayApiKey: string;
@@ -192,6 +194,9 @@ export interface TTSCredentialParams {
 	elevenlabs_api_key?: string;
 	azure_speech_key?: string;
 	azure_speech_region?: string;
+	fish_api_key?: string;
+	/** Fish Audio model override (s2.1-pro | s2.1-pro-free | ...). */
+	fish_model?: string;
 }
 
 /** Client stock credentials sent with /stock/search requests. */
