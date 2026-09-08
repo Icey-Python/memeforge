@@ -45,6 +45,7 @@ from app.providers.tts.base import (
     SynthesizedAudio,
     Voice,
     chunk_text,
+    strip_emotion_tags,
 )
 from app.providers.tts.edge import EdgeTTSProvider
 from app.providers.tts.meme_classic import MemeClassicTTSProvider
@@ -126,7 +127,9 @@ class TikTokTTSProvider(BaseTTSProvider):
         self, text: str, rate: str = "+0%", pitch: str = "+0Hz"
     ) -> SynthesizedAudio:
         # rate/pitch are accepted for BaseTTSProvider compatibility but the
-        # upstream endpoint does not expose them.
+        # upstream endpoint does not expose them. Delivery tags are
+        # stripped: the WXA endpoint would speak them literally.
+        text = strip_emotion_tags(text)
         chunks = chunk_text(text)
         if not chunks:
             raise ValueError("TikTok TTS got empty text")

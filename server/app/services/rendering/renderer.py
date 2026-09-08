@@ -26,7 +26,7 @@ from app.schemas.render_schema import CardStyle, JobStatus, RenderRequest
 from app.services import jobs as jobs_service
 from app.services.rendering import compositor
 from app.services.rendering.captions import build_caption_timeline
-from app.providers.tts.base import WordTiming
+from app.providers.tts.base import WordTiming, strip_emotion_tags
 
 # Fallback speech rate when TTS duration probing is unavailable.
 _SECONDS_PER_WORD = 0.42
@@ -67,13 +67,18 @@ def _find_sfx() -> Optional[Path]:
 
 
 def _card_title(request: RenderRequest) -> str:
-    """Headline for the top card: explicit title → topic → first line."""
+    """Headline for the top card: explicit title → topic → first line.
+
+    Delivery tags ([whisper], [laugh], ...) never reach the card: the
+    fallback first line is stripped to its spoken words.
+    """
     if request.title:
-        return request.title
+        return strip_emotion_tags(request.title)
     if request.topic:
         return request.topic
     first = request.script[0] if request.script else ""
     first = re.sub(r"\s+", " ", first).strip()
+    first = strip_emotion_tags(first)
     return first[:70] or "the take"
 
 
@@ -136,6 +141,9 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
                 job_id, progress=0.15,
                 message=f"Synthesizing voiceover ({i + 1}/{len(request.script)})",
             )
+            # Raw line to the engine: Fish Audio reads the bracketed
+            # delivery tags natively, Azure maps them to SSML styles, and
+            # every other provider strips them (see the TTS base module).
             audio = await _synthesize_with_retry(provider, line)
             part = workdir / f"line-{i:03d}.{audio.format}"
             part.write_bytes(audio.audio_bytes)
@@ -200,8 +208,12 @@ async def run_render_job(job_id: str, request: RenderRequest) -> None:
 
         # --- 4. Captions + card -------------------------------------------------
         punchlines = {len(request.script) - 1}  # last line is the punchline
+        # Captions and the card show only the spoken words: delivery tags
+        # ride the script lines for the TTS engines, never the burned-in
+        # text.
+        plain_lines = [strip_emotion_tags(line) for line in request.script]
         captions = build_caption_timeline(
-            request.script,
+            plain_lines,
             line_durations,
             punchline_indexes=punchlines,
             total_duration=total_audio_duration,

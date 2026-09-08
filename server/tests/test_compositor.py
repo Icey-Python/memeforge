@@ -17,8 +17,12 @@ from PIL import Image
 
 from app.core import settings
 from app.providers.tts.base import WordTiming
-from app.services.rendering.captions import build_caption_timeline
+from app.services.rendering.captions import (
+    CaptionFrame,
+    build_caption_timeline,
+)
 from app.services.rendering.compositor import (
+    CAPTION_SAFE_WIDTH,
     CARD_TOP_FRACTION,
     CARD_WIDTH,
     SEEK_MARGIN_S,
@@ -72,6 +76,56 @@ def test_caption_pngs_render(tmp_path: Path):
     # Full-frame-width canvases, ready for dead-center overlaying.
     with Image.open(pngs[0]) as im:
         assert im.width == settings.VIDEO_WIDTH
+
+
+def _ink_bounds(png: Path):
+    """Left/right bounds of the rendered text ink (canvas is transparent
+    everywhere else), for safe-zone assertions."""
+    with Image.open(png) as im:
+        bbox = im.getbbox()
+    assert bbox is not None, "caption frame rendered no text"
+    return bbox
+
+
+def test_caption_pngs_fit_safe_zone(tmp_path: Path):
+    """Wide caption frames never spill past the frame edges.
+
+    Regression guard for the ':FLAVOR EXTRACTS' clipping bug: the stroked
+    text is clamped to the centered safe zone (font auto-scales down),
+    so ink never starts left of the margin or ends right of it.
+    """
+    frames = [
+        CaptionFrame(
+            words=":FLAVOR EXTRACTS", start=0.0, end=1.0, is_punchline=True
+        ),
+        CaptionFrame(
+            words="SUPER CALIFRAGILISTIC PUNCHLINE",
+            start=1.0,
+            end=2.0,
+            is_punchline=True,
+        ),
+    ]
+    pngs = render_caption_pngs(frames, tmp_path)
+    margin = (settings.VIDEO_WIDTH - CAPTION_SAFE_WIDTH) / 2
+    for png in pngs:
+        assert png.exists()
+        bbox = _ink_bounds(png)
+        assert bbox[0] >= margin - 1, f"ink starts at {bbox[0]} < {margin}"
+        assert bbox[2] <= settings.VIDEO_WIDTH - margin + 1
+
+
+def test_caption_pngs_scale_font_for_long_words(tmp_path: Path):
+    """A single over-long word still fits: the font size scales down."""
+    frames = [
+        CaptionFrame(
+            words="ANTIDISESTABLISHMENTARIANISTICALLY", start=0.0, end=1.0
+        )
+    ]
+    pngs = render_caption_pngs(frames, tmp_path)
+    bbox = _ink_bounds(pngs[0])
+    margin = (settings.VIDEO_WIDTH - CAPTION_SAFE_WIDTH) / 2
+    assert bbox[0] >= margin - 1
+    assert bbox[2] <= settings.VIDEO_WIDTH - margin + 1
 
 
 def test_compose_video_fullscreen_background(tmp_path: Path):
@@ -218,6 +272,38 @@ def test_build_headline_card_quote_style(tmp_path: Path):
         assert q.width == CARD_WIDTH
         # The oversized quote mark adds height on top of the text block.
         assert q.height > h.height
+
+
+def test_build_headline_card_brand_header(tmp_path: Path):
+    """The hook card is a brand card: orange avatar tile + app name row,
+    and the old violet accent strip is gone."""
+    out = build_headline_card("Hot take incoming", tmp_path / "card.png")
+    with Image.open(out) as im:
+        assert im.mode == "RGBA"
+        # Avatar tile: memeforge orange fills the top-left header region.
+        avatar = [
+            im.getpixel((x, y))
+            for x in range(48, 88, 6)
+            for y in range(48, 88, 6)
+        ]
+        assert any(
+            abs(p[0] - 249) < 40 and abs(p[1] - 115) < 40 and abs(p[2] - 22) < 40
+            for p in avatar
+        ), "no orange avatar tile in the header row"
+        # Dark app-name / body text on the white card.
+        assert any(
+            p[0] < 80 and p[1] < 80 and p[2] < 80 and p[3] > 200
+            for x in range(110, 600, 4)
+            for y in range(40, 100, 4)
+            for p in [im.getpixel((x, y))]
+        ), "no dark app-name text next to the avatar"
+        # The violet accent strip from the old design is fully gone.
+        assert not any(
+            abs(p[0] - 139) < 40 and abs(p[1] - 92) < 40 and abs(p[2] - 246) < 40
+            for x in range(0, im.width, 6)
+            for y in range(0, im.height, 6)
+            for p in [im.getpixel((x, y))]
+        ), "violet accent remnant found"
 
 
 def test_build_headline_card_rejects_unknown_style(tmp_path: Path):

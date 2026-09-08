@@ -23,7 +23,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from app.providers.tts.base import WordTiming
+from app.providers.tts.base import WordTiming, strip_emotion_tags
 
 
 class CaptionFrame(BaseModel):
@@ -43,7 +43,9 @@ _WORDS_PER_FRAME = 2
 
 
 def _split_words(line: str) -> List[str]:
-    return [w for w in re.split(r"\s+", line.strip()) if w]
+    # Delivery tags ([whisper], [laugh], ...) ride the script lines for
+    # the TTS engines; captions show only the spoken words.
+    return [w for w in re.split(r"\s+", strip_emotion_tags(line)) if w]
 
 
 def chunk_line(line: str, words_per_frame: int = _WORDS_PER_FRAME) -> List[str]:

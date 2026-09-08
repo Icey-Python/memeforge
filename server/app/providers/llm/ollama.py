@@ -112,7 +112,11 @@ class OllamaProvider(BaseLLMProvider):
             f'"keywords": ["...", ...]}} with '
             f"exactly {max_lines} short spoken lines (1-12 words each) "
             "and 10-14 keywords. "
-            "The last line must be a punchline."
+            "The last line must be a punchline. "
+            "You may use TTS delivery tags like [whisper], [laugh], "
+            "[gasp], [excited], [sigh] or [angry] before a word or "
+            "phrase for vocal delivery, but sparingly: at most 1-2 per "
+            "script, only when they add comedic value."
         )
         payload = {
             "model": self.model,

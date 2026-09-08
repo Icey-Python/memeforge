@@ -1,17 +1,19 @@
 'use client';
 
-// Voiceover Node: TTS provider + voice picker + instant previews.
+// Voiceover Node: TTS provider + searchable voice picker + previews.
 //
-// The free meme-voice engines, Meme Classic (Brian & the classic Polly
-// cast) and TikTok Meme Voices, get their own category list with
-// per-voice preview buttons; edge/azure/google voices are grouped into
-// "meme staples" vs the rest. Fish Audio adds a model picker (pro vs
-// free trial) and a custom voice-id field for marketplace voices.
+// The voice picker is one searchable combobox across every provider's
+// catalog (Fish Audio, ElevenLabs, Edge-TTS, TikTok, Meme Classic,
+// Azure, Google): typing filters by voice name, language, tag, or
+// gender, and picking a voice from another engine switches the provider
+// with it. Every row keeps its instant preview button; Fish Audio adds
+// a model picker (pro vs free trial) and a custom voice-id field for
+// marketplace voices.
 
-import { useQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import type { NodeProps } from '@xyflow/react';
 import { AudioLines, Check, Loader2, Play } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,12 +34,13 @@ import { usePipelineStore } from '@/store/pipeline';
 import type { TTSProviderId, VoiceOption } from '@/types/studio';
 import { NodeBadge, NodeShell, StudioSelect } from '../node-shell';
 import { InlineVaultSection } from '../settings-drawer';
+import { type VoiceCatalogEntry, VoiceCombobox } from '../voice-combobox';
 
 // Offline fallback catalogs per provider (used before/without the API):
 // edge + azure share the neural shortlist, tiktok / meme_classic have the
 // meme catalogs, google maps tl codes, fish_audio carries a curated
 // marketplace shortlist; elevenlabs lists remotely (empty until an API
-// key is configured server-side).
+// key is configured).
 const OFFLINE_VOICE_FALLBACKS: Partial<Record<TTSProviderId, VoiceOption[]>> = {
 	edge: EDGE_VOICES,
 	azure: EDGE_VOICES,
@@ -46,6 +49,8 @@ const OFFLINE_VOICE_FALLBACKS: Partial<Record<TTSProviderId, VoiceOption[]>> = {
 	google: GOOGLE_VOICES,
 	fish_audio: FISH_AUDIO_VOICES
 };
+
+const PROVIDER_IDS = TTS_PROVIDERS.map((p) => p.id);
 
 export function VoiceoverNode(_props: NodeProps) {
 	const ttsProvider = usePipelineStore((s) => s.ttsProvider);
@@ -62,39 +67,55 @@ export function VoiceoverNode(_props: NodeProps) {
 	// render.
 	const vaultKeys = useCredentialsStore((s) => s.keys);
 	const keyRevision = useCredentialsStore((s) => s.revision);
-	const keyedFlag =
-		ttsProvider === 'elevenlabs'
+	const isKeyed = (provider: TTSProviderId) =>
+		provider === 'elevenlabs'
 			? Boolean(vaultKeys?.elevenlabsApiKey)
-			: ttsProvider === 'azure'
+			: provider === 'azure'
 				? Boolean(vaultKeys?.azureSpeechKey)
-				: ttsProvider === 'fish_audio'
+				: provider === 'fish_audio'
 					? Boolean(vaultKeys?.fishApiKey)
 					: true;
-	const ttsCreds = () => ttsCredentialParams(ttsProvider, vaultKeys);
 
-	const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
-	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-	const [error, setError] = useState<string | null>(null);
-
-	const { data: voices } = useQuery({
-		// Refetch when the vault's key for this provider changes.
-		queryKey: ['voices', ttsProvider, keyedFlag, keyRevision],
-		queryFn: () => MemeforgeAPI.listVoices(ttsProvider, ttsCreds()),
-		retry: false,
-		staleTime: 5 * 60_000
+	// Live voice catalogs for every provider in parallel: keyed engines
+	// (ElevenLabs library, Fish marketplace) surface their remote lists,
+	// the free engines just re-serve their static catalogs. Each query
+	// refetches when the vault's key for that provider changes.
+	const voiceQueries = useQueries({
+		queries: TTS_PROVIDERS.map((p) => ({
+			queryKey: ['voices', p.id, isKeyed(p.id), keyRevision],
+			queryFn: () =>
+				MemeforgeAPI.listVoices(p.id, ttsCredentialParams(p.id, vaultKeys)),
+			retry: false,
+			staleTime: 5 * 60_000
+		}))
 	});
 
-	const isTikTok = ttsProvider === 'tiktok';
-	const isMemeClassic = ttsProvider === 'meme_classic';
-	const isFish = ttsProvider === 'fish_audio';
-	// Free meme-voice engines get the featured category list with direct
-	// per-voice previews; Brian leads the Meme Classic cast.
-	const isFeaturedList = isTikTok || isMemeClassic;
+	// Live results per provider (undefined when the call failed or is in
+	// flight); offline fallbacks fill the gaps.
+	const liveVoices = useMemo(() => {
+		const map: Partial<Record<TTSProviderId, VoiceOption[]>> = {};
+		for (const [i, p] of TTS_PROVIDERS.entries()) {
+			const data = voiceQueries[i]?.data;
+			if (data && data.length > 0) map[p.id] = data;
+		}
+		return map;
+	}, [voiceQueries]);
 
-	const voiceOptions: VoiceOption[] =
-		voices && voices.length > 0
-			? voices
-			: (OFFLINE_VOICE_FALLBACKS[ttsProvider] ?? []);
+	// The unified searchable catalog: every provider's voices tagged with
+	// their engine, live data winning over the offline fallbacks.
+	const catalog = useMemo<VoiceCatalogEntry[]>(() => {
+		const entries: VoiceCatalogEntry[] = [];
+		for (const provider of PROVIDER_IDS) {
+			const list =
+				liveVoices[provider] ?? OFFLINE_VOICE_FALLBACKS[provider] ?? [];
+			for (const voice of list) entries.push({ ...voice, provider });
+		}
+		return entries;
+	}, [liveVoices]);
+
+	const isFish = ttsProvider === 'fish_audio';
+	const voiceOptions =
+		liveVoices[ttsProvider] ?? OFFLINE_VOICE_FALLBACKS[ttsProvider] ?? [];
 
 	// The custom-id field shows the active voice only when it is not one
 	// of the listed presets (typing there switches to that custom voice).
@@ -102,27 +123,34 @@ export function VoiceoverNode(_props: NodeProps) {
 		? ''
 		: ttsVoice;
 
-	const preview = async (voice: string) => {
-		setPreviewingVoice(voice);
+	const [previewing, setPreviewing] = useState<string | null>(null);
+	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+	const [error, setError] = useState<string | null>(null);
+
+	const selectVoice = (provider: TTSProviderId, voiceId: string) => {
+		if (provider !== ttsProvider) setTtsProvider(provider);
+		setTtsVoice(voiceId);
+	};
+
+	const preview = async (provider: TTSProviderId, voice: string) => {
+		const key = `${provider}:${voice}`;
+		setPreviewing(key);
 		setError(null);
 		try {
 			const result = await MemeforgeAPI.synthesizeSpeech({
 				text: 'This is memeforge, baby. Let us cook.',
-				provider: ttsProvider,
+				provider,
 				voice,
-				...(isFish ? { fish_model: fishModel } : {}),
-				...ttsCreds()
+				...(provider === 'fish_audio' ? { fish_model: fishModel } : {}),
+				...ttsCredentialParams(provider, vaultKeys)
 			});
 			setPreviewUrl(mediaUrl(result.audio_url));
 		} catch (err: any) {
 			setError(err?.response?.data?.detail ?? 'Voice preview failed.');
 		} finally {
-			setPreviewingVoice(null);
+			setPreviewing(null);
 		}
 	};
-
-	const memeVoices = voiceOptions.filter((v) => v.tags?.includes('meme'));
-	const otherVoices = voiceOptions.filter((v) => !v.tags?.includes('meme'));
 
 	return (
 		<NodeShell
@@ -216,98 +244,16 @@ export function VoiceoverNode(_props: NodeProps) {
 
 			<div className="space-y-1.5">
 				<Label htmlFor="tts-voice">Voice</Label>
-				{isFeaturedList ? (
-					// Featured free meme voices: category list with direct
-					// previews (Brian leads the Meme Classic cast).
-					<div
-						className="space-y-1"
-						data-testid={
-							isMemeClassic ? 'meme-classic-voice-list' : 'tiktok-voice-list'
-						}
-					>
-						{voiceOptions.map((v) => {
-							const selected = v.id === ttsVoice;
-							const previewing = previewingVoice === v.id;
-							return (
-								<div
-									key={v.id}
-									className={cn(
-										'flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition-colors',
-										selected
-											? 'border-orange-500/50 bg-orange-500/10'
-											: 'border-white/10 bg-white/[0.02] hover:border-white/20'
-									)}
-								>
-									<button
-										type="button"
-										className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-										onClick={() => setTtsVoice(v.id)}
-									>
-										{selected && (
-											<Check className="size-3.5 shrink-0 text-orange-400" />
-										)}
-										<span className="min-w-0">
-											<span className="block truncate text-xs font-medium">
-												{v.label}
-											</span>
-											<span className="block text-[10px] text-zinc-500">
-												{v.id} · {v.gender}
-											</span>
-										</span>
-									</button>
-									<Button
-										variant="ghost"
-										size="icon"
-										className="size-7 shrink-0"
-										onClick={() => preview(v.id)}
-										disabled={previewingVoice !== null}
-										aria-label={`Preview ${v.label}`}
-									>
-										{previewing ? (
-											<Loader2 className="size-3.5 animate-spin" />
-										) : (
-											<Play className="size-3.5" />
-										)}
-									</Button>
-								</div>
-							);
-						})}
-					</div>
-				) : voiceOptions.length > 0 ? (
-					<StudioSelect
-						id="tts-voice"
-						value={ttsVoice}
-						onChange={setTtsVoice}
-						groups={[
-							...(memeVoices.length > 0
-								? [
-										{
-											label: 'Meme voices',
-											options: memeVoices.map((v) => ({
-												value: v.id,
-												label: `${v.label} (${v.language}, ${v.gender})`
-											}))
-										}
-									]
-								: []),
-							...(otherVoices.length > 0
-								? [
-										{
-											label: 'More voices',
-											options: otherVoices.map((v) => ({
-												value: v.id,
-												label: `${v.label} (${v.language}, ${v.gender})`
-											}))
-										}
-									]
-								: [])
-						]}
-					/>
-				) : (
-					<p className="text-xs text-zinc-500">
-						Voices appear once a key is set above.
-					</p>
-				)}
+				<VoiceCombobox
+					id="tts-voice"
+					value={ttsVoice}
+					provider={ttsProvider}
+					catalog={catalog}
+					providerOrder={PROVIDER_IDS}
+					onSelect={selectVoice}
+					onPreview={preview}
+					previewingKey={previewing}
+				/>
 				{isFish && (
 					// Any fish.audio marketplace voice by id (the picker above
 					// covers the curated/live presets).
@@ -334,10 +280,10 @@ export function VoiceoverNode(_props: NodeProps) {
 				variant="outline"
 				size="sm"
 				className="w-full"
-				onClick={() => preview(ttsVoice)}
-				disabled={previewingVoice !== null}
+				onClick={() => preview(ttsProvider, ttsVoice)}
+				disabled={previewing !== null}
 			>
-				{previewingVoice === ttsVoice ? (
+				{previewing === `${ttsProvider}:${ttsVoice}` ? (
 					<Loader2 className="size-3.5 animate-spin" />
 				) : (
 					<Play className="size-3.5" />

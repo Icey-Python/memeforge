@@ -10,7 +10,12 @@ from typing import List, Optional
 import httpx
 
 from app.core import settings
-from app.providers.tts.base import BaseTTSProvider, SynthesizedAudio, Voice
+from app.providers.tts.base import (
+    BaseTTSProvider,
+    SynthesizedAudio,
+    Voice,
+    strip_emotion_tags,
+)
 
 
 class ElevenLabsProvider(BaseTTSProvider):
@@ -31,6 +36,12 @@ class ElevenLabsProvider(BaseTTSProvider):
     ) -> SynthesizedAudio:
         if not self.is_configured():
             raise RuntimeError("ElevenLabs TTS requires ELEVENLABS_API_KEY")
+        # ElevenLabs v2 has no bracketed delivery-tag support (audio tags
+        # like [laughs] are a v3 feature): strip them so they are never
+        # spoken literally.
+        text = strip_emotion_tags(text)
+        if not text:
+            raise ValueError("empty text")
         url = f"{self.API_BASE}/text-to-speech/{self.voice}"
         payload = {
             "text": text,
