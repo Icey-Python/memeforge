@@ -10,13 +10,14 @@
 // a model picker (pro vs free trial) and a custom voice-id field for
 // marketplace voices.
 
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import type { NodeProps } from '@xyflow/react';
-import { AudioLines, Check, Loader2, Play } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { AudioLines, Check, Loader2, Play, Square } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import {
 	EDGE_VOICES,
 	FISH_AUDIO_VOICES,
@@ -113,6 +114,35 @@ export function VoiceoverNode(_props: NodeProps) {
 		return entries;
 	}, [liveVoices]);
 
+	// Live marketplace search: the combobox reports every keystroke, the
+	// debounce settles it, and a non-empty term searches the Fish Audio
+	// public library server-side (unkeyed/failed searches return [], so
+	// the picker falls back to the locally filtered catalog).
+	const [voiceSearch, setVoiceSearch] = useState('');
+	const debouncedSearch = useDebouncedValue(voiceSearch, 300).trim();
+	const fishSearch = useQuery({
+		queryKey: ['voices', 'fish_audio', 'search', debouncedSearch, keyRevision],
+		queryFn: () =>
+			MemeforgeAPI.listVoices(
+				'fish_audio',
+				ttsCredentialParams('fish_audio', vaultKeys),
+				debouncedSearch
+			),
+		enabled: debouncedSearch.length > 0,
+		retry: false,
+		staleTime: 60_000
+	});
+	// Remote marketplace matches tagged with their engine for the
+	// combobox's searched list (deduped against the local catalog there).
+	const remoteVoiceEntries = useMemo<VoiceCatalogEntry[]>(
+		() =>
+			(fishSearch.data ?? []).map((voice) => ({
+				...voice,
+				provider: 'fish_audio' as const
+			})),
+		[fishSearch.data]
+	);
+
 	const isFish = ttsProvider === 'fish_audio';
 	const voiceOptions =
 		liveVoices[ttsProvider] ?? OFFLINE_VOICE_FALLBACKS[ttsProvider] ?? [];
@@ -124,8 +154,27 @@ export function VoiceoverNode(_props: NodeProps) {
 		: ttsVoice;
 
 	const [previewing, setPreviewing] = useState<string | null>(null);
-	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+	const [playingKey, setPlayingKey] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const audioRef = useRef<HTMLAudioElement | null>(null);
+
+	// Stop the currently playing preview audio (keeps the ref + state in
+	// sync so a finished/stopped/switched preview always clears its row).
+	const stopPreview = () => {
+		if (audioRef.current) {
+			audioRef.current.pause();
+			audioRef.current = null;
+		}
+		setPlayingKey(null);
+	};
+
+	// Cut playback when the node unmounts (deleted node, stage reset).
+	useEffect(() => {
+		return () => {
+			audioRef.current?.pause();
+			audioRef.current = null;
+		};
+	}, []);
 
 	const selectVoice = (provider: TTSProviderId, voiceId: string) => {
 		if (provider !== ttsProvider) setTtsProvider(provider);
@@ -134,6 +183,11 @@ export function VoiceoverNode(_props: NodeProps) {
 
 	const preview = async (provider: TTSProviderId, voice: string) => {
 		const key = `${provider}:${voice}`;
+		if (playingKey === key) {
+			stopPreview(); // re-click stops the playing preview
+			return;
+		}
+		stopPreview(); // switching voices cuts whatever else is playing
 		setPreviewing(key);
 		setError(null);
 		try {
@@ -144,8 +198,28 @@ export function VoiceoverNode(_props: NodeProps) {
 				...(provider === 'fish_audio' ? { fish_model: fishModel } : {}),
 				...ttsCredentialParams(provider, vaultKeys)
 			});
-			setPreviewUrl(mediaUrl(result.audio_url));
+			// Inline playback: a detached HTMLAudioElement driven from JS
+			// (no visible <audio controls> chrome in the node card).
+			const audio = new Audio(mediaUrl(result.audio_url));
+			const release = () => {
+				if (audioRef.current === audio) {
+					audioRef.current = null;
+					setPlayingKey(null);
+				}
+			};
+			audio.onended = release;
+			audio.onerror = () => {
+				release();
+				setError('Voice preview failed.');
+			};
+			audioRef.current = audio;
+			setPlayingKey(key);
+			await audio.play();
 		} catch (err: any) {
+			if (audioRef.current) {
+				audioRef.current = null;
+				setPlayingKey(null);
+			}
 			setError(err?.response?.data?.detail ?? 'Voice preview failed.');
 		} finally {
 			setPreviewing(null);
@@ -253,6 +327,10 @@ export function VoiceoverNode(_props: NodeProps) {
 					onSelect={selectVoice}
 					onPreview={preview}
 					previewingKey={previewing}
+					playingKey={playingKey}
+					onSearchChange={setVoiceSearch}
+					remoteEntries={remoteVoiceEntries}
+					remoteSearching={fishSearch.isFetching}
 				/>
 				{isFish && (
 					// Any fish.audio marketplace voice by id (the picker above
@@ -276,30 +354,27 @@ export function VoiceoverNode(_props: NodeProps) {
 				)}
 			</div>
 
+			{/* Inline preview: synthesizes on click, plays without an
+			<audio> element; re-click stops the playing audio. */}
 			<Button
 				variant="outline"
 				size="sm"
 				className="w-full"
 				onClick={() => preview(ttsProvider, ttsVoice)}
 				disabled={previewing !== null}
+				data-testid="preview-voice"
 			>
 				{previewing === `${ttsProvider}:${ttsVoice}` ? (
 					<Loader2 className="size-3.5 animate-spin" />
+				) : playingKey === `${ttsProvider}:${ttsVoice}` ? (
+					<Square className="size-3.5" />
 				) : (
 					<Play className="size-3.5" />
 				)}
-				Preview selected voice
+				{playingKey === `${ttsProvider}:${ttsVoice}`
+					? 'Stop preview'
+					: 'Preview selected voice'}
 			</Button>
-
-			{previewUrl && (
-				// eslint-disable-next-line jsx-a11y/media-has-caption
-				<audio
-					controls
-					src={previewUrl}
-					className="h-8 w-full"
-					data-testid="voice-preview"
-				/>
-			)}
 
 			{error && (
 				<p className="text-xs text-red-400" role="alert">

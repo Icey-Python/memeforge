@@ -410,16 +410,16 @@ export const GOOGLE_VOICES: VoiceOption[] = [
 	}
 ];
 
-/** Fish Audio curated voices (mirrors the backend shortlist; the empty
- * id is the built-in default narrator — no reference_id). Live trending
- * voices replace these once a Fish key is set. */
+/** Fish Audio curated voices (mirrors the backend shortlist; the
+ * leading id is the official narrator every empty voice falls back to).
+ * Live trending voices replace these once a Fish key is set. */
 export const FISH_AUDIO_VOICES: VoiceOption[] = [
 	{
-		id: '',
-		label: 'Default narrator',
+		id: '933563129e564b19a115bedd57b7406a',
+		label: 'Sarah (default narrator)',
 		language: 'en',
-		gender: 'unknown',
-		tags: ['narration']
+		gender: 'female',
+		tags: ['narration', 'conversational']
 	},
 	{
 		id: '90e65eaaf50e4470b8e6d43ee6afd7d5',
@@ -441,13 +441,6 @@ export const FISH_AUDIO_VOICES: VoiceOption[] = [
 		language: 'en',
 		gender: 'male',
 		tags: ['meme', 'energetic']
-	},
-	{
-		id: '933563129e564b19a115bedd57b7406a',
-		label: 'Sarah',
-		language: 'en',
-		gender: 'female',
-		tags: ['conversational', 'narration']
 	},
 	{
 		id: '98655a12fa944e26b274c535e5e03842',

@@ -41,11 +41,25 @@ from app.providers.tts.base import (
 MODELS = ("s2.1-pro", "s2.1-pro-free", "s2-pro", "s1")
 DEFAULT_MODEL = "s2.1-pro"
 
+# Official Fish narrator voice (marketplace model "Sarah"). Fish Audio
+# picks a RANDOM synthetic speaker for every request that omits
+# `reference_id`, which breaks voice consistency across the lines of a
+# render — so an empty/unconfigured voice resolves to this stable id
+# instead (FISH_VOICE_ID in the server .env overrides it).
+FISH_NARRATOR_VOICE = "933563129e564b19a115bedd57b7406a"
+
 # Curated shortlist of trending marketplace voices (offline fallback for
 # the voice picker; live listing via GET /model once a key is set). The
-# empty-id entry is Fish's built-in default narrator (no reference_id).
+# leading entry is the official narrator every unconfigured voice falls
+# back to (a real marketplace id, never the empty built-in default).
 _VOICE_SHORTLIST: List[Voice] = [
-    Voice(id="", label="Default narrator", language="en", gender="unknown", tags=["narration"]),
+    Voice(
+        id=FISH_NARRATOR_VOICE,
+        label="Sarah (default narrator)",
+        language="en",
+        gender="female",
+        tags=["narration", "conversational"],
+    ),
     Voice(
         id="90e65eaaf50e4470b8e6d43ee6afd7d5",
         label="Smash Bros Announcer",
@@ -66,13 +80,6 @@ _VOICE_SHORTLIST: List[Voice] = [
         language="en",
         gender="male",
         tags=["meme", "energetic"],
-    ),
-    Voice(
-        id="933563129e564b19a115bedd57b7406a",
-        label="Sarah",
-        language="en",
-        gender="female",
-        tags=["conversational", "narration"],
     ),
     Voice(
         id="98655a12fa944e26b274c535e5e03842",
@@ -275,7 +282,13 @@ class FishAudioTTSProvider(BaseTTSProvider):
         api_key: Optional[str] = None,
         model: Optional[str] = None,
     ) -> None:
-        super().__init__(voice or settings.FISH_DEFAULT_VOICE or "")
+        # An empty/unconfigured voice resolves to the official narrator:
+        # omitting reference_id would make Fish pick a random synthetic
+        # speaker on every request (a different voice per script line).
+        voice = (
+            voice or settings.FISH_DEFAULT_VOICE or FISH_NARRATOR_VOICE
+        ).strip()
+        super().__init__(voice or FISH_NARRATOR_VOICE)
         # Client-supplied credentials (studio key vault) take priority
         # over the server .env default.
         self.api_key = (api_key or settings.FISH_API_KEY or "").strip()
@@ -399,14 +412,16 @@ class FishAudioTTSProvider(BaseTTSProvider):
     ) -> List[Voice]:
         """Search the Fish Audio voice marketplace (GET /model).
 
-        Trending voices (sort_by=score) when `query` is empty; title
-        search otherwise.
+        Trending voices (sort_by=score) when `query` is empty — led by
+        the default narrator — or title-matched marketplace results
+        otherwise (no narrator prepend: a search wants matches only).
         """
         if not self.is_configured():
             return []
         params: Dict[str, Any] = {"page_size": page_size, "page_number": 1}
-        if query.strip():
-            params["title"] = query.strip()
+        term = query.strip()
+        if term:
+            params["title"] = term
         else:
             params["sort_by"] = "score"
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -417,11 +432,15 @@ class FishAudioTTSProvider(BaseTTSProvider):
             )
             resp.raise_for_status()
             data = resp.json()
-        voices: List[Voice] = [_VOICE_SHORTLIST[0]]  # default narrator leads
+        voices: List[Voice] = []
+        if not term:
+            voices.append(_VOICE_SHORTLIST[0])  # default narrator leads
+        seen = {v.id for v in voices}
         for item in data.get("items", []):
             if isinstance(item, dict):
                 voice = _model_entity_to_voice(item)
-                if voice is not None:
+                if voice is not None and voice.id not in seen:
+                    seen.add(voice.id)
                     voices.append(voice)
         return voices
 
