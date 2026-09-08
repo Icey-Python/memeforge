@@ -75,9 +75,9 @@ class ScriptGenerateRequest(BaseModel):
         le=300,
         description=(
             "Target spoken length in seconds (30/60/90 are the studio "
-            "presets). Drives the word-count target: ~2.2-2.5 words/sec "
-            "of speech, so 60s ≈ 130-150 words — the sweet spot for "
-            "YouTube Shorts, TikTok, and Reels"
+            "presets). Drives the word-count target: ~2.3-2.7 words/sec "
+            "of speech, so 60s ≈ 135-165 words — a full minute of "
+            "audio, the sweet spot for YouTube Shorts, TikTok, and Reels"
         ),
     )
     max_lines: Optional[int] = Field(

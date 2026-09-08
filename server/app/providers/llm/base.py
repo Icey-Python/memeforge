@@ -4,31 +4,55 @@ A provider turns a video topic into a short-form video script (list of
 spoken lines). Implementations must be async so they can be awaited
 directly inside FastAPI endpoints and background render jobs.
 
-Duration pacing: scripts target a spoken length in seconds. At a ~140
-wpm speaking pace that is ~2.2-2.5 words per second, so a 60-second
-script lands at ~130-150 words — the standard for YouTube Shorts,
-TikTok, and Reels. `word_target()` and `default_line_count()` convert a
-duration target into those budgets.
+Duration pacing: scripts target a spoken length in seconds. At a
+~140-160 wpm speaking pace a 60-second script needs a full ~150 words
+(135-165), 30s lands at 65-80, and 90s at 205-240 — the standard for
+YouTube Shorts, TikTok, and Reels. `word_target()`,
+`default_line_count()`, and `prompt_budget()` convert a duration
+target into those budgets; the frontend mirrors the pace in
+`web/src/lib/script-split.ts`.
 """
 
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
 
 
-# Spoken pace used to convert duration targets into word budgets
-# (~140 wpm: 2.2 words/s is the floor, 2.5 words/s the ceiling).
-_WORDS_PER_SEC_MIN = 2.2
-_WORDS_PER_SEC_MAX = 2.5
-# Rough line pacing: one short spoken line ≈ 4 seconds of speech.
+# Word budgets for the studio duration presets (30/60/90 s). Spoken
+# pace including TTS pauses and delivery tags lands at ~2.3-2.7
+# words/sec, so a 60-second script needs a full ~150 words — enough
+# speech to actually fill a minute of audio.
+_WORD_BUDGETS: Dict[int, Tuple[int, int]] = {
+    30: (65, 80),
+    60: (135, 165),
+    90: (205, 240),
+}
+
+# Fallback pacing for non-preset durations (~2.3-2.7 words/sec).
+_WORDS_PER_SEC_MIN = 2.3
+_WORDS_PER_SEC_MAX = 2.7
+# Rough line pacing: one spoken sentence ≈ 4 seconds of speech.
 _SECONDS_PER_LINE = 4.0
+
+# Prompt-facing bands: LLMs drift short when given loose word ranges,
+# so the system prompts phrase a tight inner band of the budget plus
+# an explicit line range for the model to aim at.
+_PROMPT_BUDGETS: Dict[int, Tuple[int, int, int, int]] = {
+    30: (70, 80, 7, 9),
+    60: (140, 160, 14, 17),
+    90: (210, 230, 21, 25),
+}
 
 
 def word_target(duration_target: int) -> Tuple[int, int]:
     """(min_words, max_words) a script should hit for `duration_target` s.
 
-    E.g. 60s → (132, 150): the classic ~130-150 word short-form pacing.
+    E.g. 60s → (135, 165): a full ~150 words of speech — the classic
+    short-form pacing that fills a minute of TTS audio.
     """
+    preset = _WORD_BUDGETS.get(duration_target)
+    if preset is not None:
+        return preset
     return (
         round(duration_target * _WORDS_PER_SEC_MIN),
         round(duration_target * _WORDS_PER_SEC_MAX),
@@ -40,7 +64,29 @@ def default_line_count(duration_target: int) -> int:
 
     E.g. 30s → 8 lines, 60s → 15 lines, 90s → 23 lines (capped at 40).
     """
-    return max(5, min(40, round(duration_target / _SECONDS_PER_LINE)))
+    return max(5, min(40, int(duration_target / _SECONDS_PER_LINE + 0.5)))
+
+
+def prompt_budget(duration_target: int) -> Tuple[int, int, int, int]:
+    """(word_lo, word_hi, line_lo, line_hi) phrased into LLM prompts.
+
+    E.g. 60s → 140-160 words across 14-17 lines: a tight inner band of
+    `word_target` plus the line range the model should aim for —
+    undershooting the budget ends the video early. Non-preset durations
+    derive a band around the word_target midpoint.
+    """
+    preset = _PROMPT_BUDGETS.get(duration_target)
+    if preset is not None:
+        return preset
+    w_min, w_max = word_target(duration_target)
+    pad = max(1, (w_max - w_min) // 5)
+    lines = default_line_count(duration_target)
+    return (
+        w_min + pad,
+        w_max - pad,
+        max(1, lines - max(1, lines // 10)),
+        lines,
+    )
 
 
 class GeneratedScript(BaseModel):

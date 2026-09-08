@@ -14,7 +14,7 @@ from app.providers.llm.base import (
     BaseLLMProvider,
     DiscoveredModel,
     GeneratedScript,
-    word_target,
+    prompt_budget,
 )
 
 
@@ -96,12 +96,16 @@ class OllamaProvider(BaseLLMProvider):
         if not self.is_configured():
             raise RuntimeError("Ollama provider has no base URL configured")
 
-        w_min, w_max = word_target(duration_target)
+        w_lo, w_hi, l_lo, l_hi = prompt_budget(duration_target)
         prompt = (
             f'Write a {tone} vertical video script about "{topic}" for '
             "short-form platforms (YouTube Shorts, TikTok, Reels). Target "
-            f"{duration_target} seconds of spoken speech — roughly "
-            f"{w_min}-{w_max} words in total. "
+            f"{duration_target} seconds of spoken speech: {w_lo}-{w_hi} "
+            f"words in total, spread across {l_lo}-{l_hi} lines. "
+            "Hit the word budget — a script that undershoots it "
+            "ends the video early. Every line is one complete, "
+            "engaging spoken sentence averaging 9-14 words, never "
+            "a short fragment. "
             "Also produce 10-14 visual stock-video search phrases "
             "(2-4 words each, concrete subjects/actions a stock site "
             "like Pexels would return vertical b-roll for), ordered by "
@@ -110,8 +114,7 @@ class OllamaProvider(BaseLLMProvider):
             f'{{"title": "<short punchy title>", '
             f'"lines": ["...", ...], '
             f'"keywords": ["...", ...]}} with '
-            f"exactly {max_lines} short spoken lines (1-12 words each) "
-            "and 10-14 keywords. "
+            f"{l_lo}-{l_hi} spoken lines and 10-14 keywords. "
             "The last line must be a punchline. "
             "You may use TTS delivery tags like [whisper], [laugh], "
             "[gasp], [excited], [sigh] or [angry] before a word or "
