@@ -12,6 +12,7 @@ import {
 	ChevronDown,
 	ChevronUp,
 	ClipboardPaste,
+	Drama,
 	Plus,
 	Sparkles,
 	Tags,
@@ -23,7 +24,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { estimateSpokenSeconds, splitScriptText } from '@/lib/script-split';
+import {
+	EMOTION_TAGS,
+	estimateSpokenSeconds,
+	splitScriptText,
+	stripEmotionTags
+} from '@/lib/script-split';
 import { cn } from '@/lib/utils';
 import { usePipelineStore } from '@/store/pipeline';
 import { NodeBadge, NodeShell } from '../node-shell';
@@ -114,6 +120,54 @@ function KeywordChips() {
 	);
 }
 
+/** Quick-insert row for TTS delivery tags: one click prepends the tag
+ * to the focused script line (falling back to the last line). The tags
+ * steer the voiceover's vocal delivery on engines that read them. */
+function EmotionTagRow({
+	lines,
+	setLines,
+	focusedIndex
+}: {
+	lines: string[];
+	setLines: (lines: string[]) => void;
+	focusedIndex: number | null;
+}) {
+	const insertTag = (tag: string) => {
+		const index = focusedIndex ?? lines.length - 1;
+		if (index < 0 || index >= lines.length) return;
+		const base = lines[index].trim();
+		const tagged = base ? `[${tag}] ${base}` : `[${tag}]`;
+		setLines(updateAt(lines, index, tagged));
+	};
+
+	return (
+		<div className="space-y-1.5" data-testid="emotion-tags">
+			<Label className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+				<Drama className="size-3" />
+				Delivery tags
+			</Label>
+			<div className="flex flex-wrap gap-1">
+				{EMOTION_TAGS.map((tag) => (
+					<button
+						key={tag}
+						type="button"
+						onClick={() => insertTag(tag)}
+						className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-zinc-400 transition-colors hover:border-orange-500/40 hover:text-orange-300 active:scale-[0.98]"
+						aria-label={`Insert ${tag} delivery tag`}
+						data-testid={`emotion-tag-${tag}`}
+					>
+						[{tag}]
+					</button>
+				))}
+			</div>
+			<p className="text-[10px] text-zinc-600">
+				Prepends to the focused line. Fish Audio and Azure use them for vocal
+				delivery; other engines skip them.
+			</p>
+		</div>
+	);
+}
+
 export function ScriptNode(_props: NodeProps) {
 	const topic = usePipelineStore((s) => s.topic);
 	const scriptMode = usePipelineStore((s) => s.scriptMode);
@@ -128,11 +182,15 @@ export function ScriptNode(_props: NodeProps) {
 	const confirmScript = usePipelineStore((s) => s.confirmScript);
 	const generatingError = usePipelineStore((s) => s.generatingError);
 
-	const wordCount = scriptLines.reduce(
-		(total, line) =>
-			total + (line.trim() ? line.trim().split(/\s+/).length : 0),
-		0
-	);
+	// Line last focused (survives the blur when a tag button is clicked).
+	const [focusedLine, setFocusedLine] = useState<number | null>(null);
+
+	// Delivery tags are never spoken: word counts and pacing estimates
+	// strip them before counting.
+	const wordCount = scriptLines.reduce((total, line) => {
+		const plain = stripEmotionTags(line);
+		return total + (plain ? plain.split(/\s+/).length : 0);
+	}, 0);
 	const spokenSeconds = Math.round(estimateSpokenSeconds(wordCount));
 	const customLines = customScriptText.trim()
 		? splitScriptText(customScriptText)
@@ -257,6 +315,7 @@ export function ScriptNode(_props: NodeProps) {
 									onChange={(e) =>
 										setScriptLines(updateAt(scriptLines, i, e.target.value))
 									}
+									onFocus={() => setFocusedLine(i)}
 									className="h-8 min-w-0 flex-1 text-xs"
 									aria-label={`Script line ${i + 1}`}
 								/>
@@ -308,6 +367,14 @@ export function ScriptNode(_props: NodeProps) {
 							<Plus className="size-3" />
 							Add line
 						</Button>
+
+						{/* One-click TTS delivery tags for the focused line (the
+						 * voiceover engines interpret them; captions strip them). */}
+						<EmotionTagRow
+							lines={scriptLines}
+							setLines={setScriptLines}
+							focusedIndex={focusedLine}
+						/>
 
 						{/* Visual keywords shipped with the script, editable, and the
 						 * search set for the auto-selected stock montage (Step 4). */}

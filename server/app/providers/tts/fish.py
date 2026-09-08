@@ -32,6 +32,7 @@ from app.providers.tts.base import (
     SynthesizedAudio,
     Voice,
     WordTiming,
+    strip_emotion_tags,
 )
 
 # Supported TTS models (sent as the `model` header on every request).
@@ -301,6 +302,11 @@ class FishAudioTTSProvider(BaseTTSProvider):
         return headers
 
     def _build_payload(self, text: str, rate: str) -> Dict[str, Any]:
+        # s2 models read bracketed delivery tags ([laugh], [whisper], ...)
+        # natively as sound expressions, so they ride the text untouched.
+        # The legacy s1 model would speak them literally: strip them.
+        if not self.model.startswith("s2"):
+            text = strip_emotion_tags(text) or text
         payload: Dict[str, Any] = {
             "text": text,
             "format": "mp3",

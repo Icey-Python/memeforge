@@ -126,7 +126,12 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             f"string[{max_lines}], "
             '"keywords": string[10..14]}. '
             "Short spoken lines, 1-12 words each, last line is "
-            "a punchline. No markdown."
+            "a punchline. "
+            "You may use TTS delivery tags like [whisper], [laugh], "
+            "[gasp], [excited], [sigh] or [angry] before a word or "
+            "phrase for vocal delivery, but sparingly: at most 1-2 per "
+            "script, only when they add comedic value. "
+            "No markdown."
         )
         parsed = await self._chat_completion_json(
             system, f"Topic: {topic}", temperature=0.9

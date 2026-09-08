@@ -14,8 +14,60 @@ from xml.sax.saxutils import escape
 import httpx
 
 from app.core import settings
-from app.providers.tts.base import BaseTTSProvider, SynthesizedAudio, Voice
+from app.providers.tts.base import (
+    BaseTTSProvider,
+    SynthesizedAudio,
+    Voice,
+    split_emotion_segments,
+    strip_emotion_tags,
+)
 from app.providers.tts.edge import _VOICE_SHORTLIST
+
+# Inline delivery tags -> Azure `mstts:express-as` styles. Azure has no
+# literal laugh/gasp style, so those map to the nearest documented one
+# (cheerful laughter energy, fearful sharp intake). Voices that lack a
+# style ignore it and speak with their default delivery.
+_EMOTION_STYLES = {
+    "whisper": "whispering",
+    "laugh": "cheerful",
+    "gasp": "fearful",
+    "excited": "excited",
+    "sigh": "disgruntled",
+    "angry": "angry",
+}
+
+
+def build_ssml(text: str, voice: str, rate: str, pitch: str) -> str:
+    """SSML document for one synthesis call, delivery tags included.
+
+    Bracketed tags ([whisper], [angry], ...) become
+    `<mstts:express-as style="...">` runs around the text they precede;
+    untagged text passes through escaped. Tag-free input produces plain
+    prosody-only SSML (no express-as element).
+    """
+    body_parts: List[str] = []
+    for tag, chunk in split_emotion_segments(text):
+        escaped = escape(chunk.strip())
+        if not escaped:
+            continue
+        style = _EMOTION_STYLES.get(tag or "")
+        if style:
+            body_parts.append(
+                f'<mstts:express-as style="{style}">{escaped}</mstts:express-as>'
+            )
+        else:
+            body_parts.append(escaped)
+    body = " ".join(body_parts) if body_parts else escape(strip_emotion_tags(text))
+    return (
+        '<speak version="1.0" '
+        'xmlns="http://www.w3.org/2001/10/synthesis" '
+        'xmlns:mstts="https://www.w3.org/2001/mstts" '
+        'xml:lang="en-US">'
+        f'<voice name="{escape(voice)}">'
+        f'<prosody rate="{escape(rate)}" pitch="{escape(pitch)}">'
+        f"{body}"
+        "</prosody></voice></speak>"
+    )
 
 
 class AzureTTSProvider(BaseTTSProvider):
@@ -61,14 +113,7 @@ class AzureTTSProvider(BaseTTSProvider):
                 "Azure TTS requires AZURE_SPEECH_KEY and AZURE_SPEECH_REGION"
             )
         token = self._auth_token()
-        ssml = (
-            '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" '
-            'xml:lang="en-US">'
-            f'<voice name="{escape(self.voice)}">'
-            f'<prosody rate="{escape(rate)}" pitch="{escape(pitch)}">'
-            f"{escape(text)}"
-            "</prosody></voice></speak>"
-        )
+        ssml = build_ssml(text, self.voice, rate, pitch)
         url = (
             f"https://{self.region}.tts.speech.microsoft.com"
             f"/cognitiveservices/v1"

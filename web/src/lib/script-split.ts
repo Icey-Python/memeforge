@@ -21,6 +21,29 @@ const DEFAULTS: Required<SplitScriptOptions> = {
 /** ~140 wpm spoken pace — matches the backend's word_target budgets. */
 export const WORDS_PER_SECOND = 2.4;
 
+/** Inline TTS delivery tags a script line may carry (mirrors the backend
+ * EMOTION_TAGS in server/app/providers/tts/base.py). Fish Audio reads
+ * them natively, Azure maps them to SSML styles, other engines strip
+ * them; captions always show only the spoken words. */
+export const EMOTION_TAGS = [
+	'whisper',
+	'laugh',
+	'gasp',
+	'excited',
+	'sigh',
+	'angry'
+] as const;
+
+const EMOTION_TAG_RE = new RegExp(
+	`\\[\\s*(?:${EMOTION_TAGS.join('|')})\\s*\\]`,
+	'giu'
+);
+
+/** Strip delivery tags from a script line, collapsing leftover space. */
+export function stripEmotionTags(text: string): string {
+	return text.replace(EMOTION_TAG_RE, ' ').replace(/\s+/g, ' ').trim();
+}
+
 /** Estimated spoken length of a word count, in seconds. */
 export function estimateSpokenSeconds(words: number): number {
 	return words / WORDS_PER_SECOND;
@@ -129,9 +152,13 @@ export function splitScriptText(
 	return merged.slice(0, maxLines);
 }
 
-/** Card/short title derived from the first line of a custom script. */
+/** Card/short title derived from the first line of a custom script
+ * (delivery tags stripped: the card shows spoken words only). */
 export function deriveScriptTitle(lines: string[]): string {
-	const first = (lines[0] ?? '').trim().replace(/[.!?…]+$/u, '');
+	const first = stripEmotionTags((lines[0] ?? '').trim()).replace(
+		/[.!?…]+$/u,
+		''
+	);
 	if (!first) return 'custom script';
 	const words = first.split(/\s+/);
 	return words.length > 8 ? words.slice(0, 8).join(' ') : first;

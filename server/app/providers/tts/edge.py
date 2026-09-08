@@ -22,6 +22,7 @@ from app.providers.tts.base import (
     SynthesizedAudio,
     Voice,
     WordTiming,
+    strip_emotion_tags,
 )
 
 # Curated shortlist; the full catalog has 300+ voices and can be listed
@@ -83,6 +84,11 @@ class EdgeTTSProvider(BaseTTSProvider):
     async def synthesize(
         self, text: str, rate: str = "+0%", pitch: str = "+0Hz"
     ) -> SynthesizedAudio:
+        # Edge-TTS has no delivery-tag support: strip them so they are
+        # never spoken literally.
+        text = strip_emotion_tags(text)
+        if not text:
+            raise ValueError("empty text")
         try:
             import edge_tts
         except ImportError as exc:

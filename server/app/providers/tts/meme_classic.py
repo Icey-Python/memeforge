@@ -28,6 +28,7 @@ from app.providers.tts.base import (
     SynthesizedAudio,
     Voice,
     chunk_text,
+    strip_emotion_tags,
 )
 
 _API_URL = "https://ttsmp3.com/makemp3_new.php"
@@ -120,7 +121,9 @@ class MemeClassicTTSProvider(BaseTTSProvider):
         self, text: str, rate: str = "+0%", pitch: str = "+0Hz"
     ) -> SynthesizedAudio:
         # rate/pitch are accepted for BaseTTSProvider compatibility but the
-        # upstream endpoint does not expose them.
+        # upstream endpoint does not expose them. Delivery tags are
+        # stripped: ttsmp3 would speak them literally.
+        text = strip_emotion_tags(text)
         chunks = chunk_text(text, limit=_MAX_TEXT_LEN)
         if not chunks:
             raise ValueError("Meme Classic TTS got empty text")

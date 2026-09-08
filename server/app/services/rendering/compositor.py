@@ -6,11 +6,13 @@ short in the classic viral layout:
 
     ┌───────────────────────────────┐
     │   ╭─────────────────────╮     │  floating headline card
-    │   │  BOLD HOOK HEADLINE  │     │  ("hook" style) or quote card
-    │   │  OR QUOTED LINE      │     │  ("quote" style), pinned
-    │   │                      │     │  ~15% from the top, fades out
-    │   ╰─────────────────────╯     │  after the hook line lands
-    │                               │
+    │   │ [M] Memeforge       │     │  (brand card: avatar + name
+    │   │     @memeforge      │     │  + handle row, then the
+    │   │  HOOK HEADLINE TEXT │     │  hookline in dark type), or
+    │   │  OR QUOTED LINE     │     │  a quote card with an
+    │   │                     │     │  oversized quote mark; pinned
+    │   ╰─────────────────────╯     │  ~15% from the top, fades out
+    │                               │  after the hook line lands
     │        KINETIC                │  1-2 words per frame, dead
     │        CAPTIONS               │  center of the frame, massive
     │        1-2 WORDS              │  bold font + heavy black stroke
@@ -53,6 +55,12 @@ CAPTION_COLOR = "white"
 CAPTION_STROKE_COLOR = "black"
 PUNCHLINE_COLOR = "FDE047"  # yellow pop on punchlines
 PUNCHLINE_FONT_SIZE = 126
+# Kinetic captions are burned onto full-frame-width canvases; the text
+# itself must stay inside this centered safe zone so it never spills
+# past the left/right frame edges (the ":FLAVOR EXTRACTS" clipping bug).
+# Overlong frames auto-scale their font down to fit instead of clipping.
+CAPTION_SAFE_WIDTH = 900
+CAPTION_MIN_FONT_SIZE = 28  # floor for the auto-fit scaling
 
 # --- Floating headline / quote card ----------------------------------------
 CARD_WIDTH = 920  # of 1080 — floats with margins
@@ -254,8 +262,25 @@ def _wrap_text(draw, text: str, font, max_width: int) -> List[str]:
     return lines
 
 
-# Brand accent used on the hook card's edge strip.
-_CARD_ACCENT = (139, 92, 246, 255)  # violet
+# Brand palette for the card's app-header row. The avatar tile uses the
+# studio accent orange; text stays dark-on-white for high contrast.
+_CARD_BRAND = (249, 115, 22, 255)   # avatar tile: memeforge orange
+_CARD_TEXT = (15, 17, 21, 255)      # near-black headline / app name
+_CARD_MUTED = (113, 118, 123, 255)  # handle / quote mark gray
+_CARD_APP_NAME = "Memeforge"
+_CARD_APP_HANDLE = "@memeforge"
+
+
+def _draw_centered_glyph(draw, xy, size, text, font, fill) -> None:
+    """Draw `text` centered inside the `size`-square at `xy` (2x coords)."""
+    bbox = draw.textbbox((0, 0), text, font=font)
+    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    draw.text(
+        (xy[0] + (size - w) / 2 - bbox[0], xy[1] + (size - h) / 2 - bbox[1]),
+        text,
+        font=font,
+        fill=fill,
+    )
 
 
 def build_headline_card(
@@ -266,31 +291,43 @@ def build_headline_card(
 ) -> Path:
     """Render the floating top card as a transparent PNG.
 
-    A clean, generic rounded card overlaid on the upper-center of the
-    full-screen background. Two styles:
+    A clean white rounded card with a soft drop shadow, styled like a
+    brand post: the top row carries the Memeforge app avatar (orange
+    tile with an M), the app name and a muted handle — no checkmarks,
+    no social action bar, no timestamp. The body renders the hookline
+    in dark high-contrast type with generous padding and clean word
+    wrapping. Two styles:
 
-    - ``hook``  — bold headline with a violet accent strip on the left
-                  edge, for the opening hook / headline.
-    - ``quote`` — oversized quote mark above a quoted line, for
-                  quote-style videos.
+    - ``hook``  — the brand card with the hookline as the body text.
+    - ``quote`` — the same clean card, plus an oversized decorative
+                  quote mark above the quoted line.
 
     Everything is drawn at 2x and downscaled for smooth (anti-aliased)
-    edges. Callers pass ``card_style="none"`` by not building a card at
-    all (a clean full video without card).
+    edges. Callers pass ``card_style="none"`` by not building a card
+    at all (a clean full video without card).
     """
     if style not in CARD_STYLES:
         raise ValueError(f"unknown card style '{style}' (expected {CARD_STYLES})")
 
     from PIL import Image, ImageDraw
 
-    scale = 2  # supersample for anti-aliased corners and icons
-    pad = 48
+    scale = 2  # supersample for anti-aliased corners and glyphs
+    pad = 40
     is_quote = style == "quote"
-    title_size = 40 if is_quote else 46
-    title_line_h = 54 if is_quote else 60
-    quote_mark_size = 96
-    gap_quote_title = 8
-    accent_w = 8  # hook card: accent strip inside the left edge
+
+    # Header row geometry (app avatar + name/handle column).
+    avatar_size = 56
+    avatar_radius = 16
+    avatar_gap = 16
+    header_h = 60
+    # Body geometry; the quote style trades a bit of title size for the
+    # oversized decorative quote mark above the text.
+    title_size = 38 if is_quote else 42
+    title_line_h = 52 if is_quote else 56
+    quote_mark_size = 88
+    gap_quote_title = 4
+    gap_header_body = 20 if is_quote else 26
+    shadow_pad = 14  # canvas room for the soft drop shadow below the body
 
     # All geometry/fonts are computed directly at the supersampled scale.
     def S(v: float) -> float:
@@ -298,58 +335,87 @@ def build_headline_card(
 
     title_font = _load_font(S(title_size))
     quote_font = _load_font(S(quote_mark_size))
+    name_font = _load_font(S(27))
+    handle_font = _load_font(S(20))
+    avatar_font = _load_font(S(34))
 
     # Measure text with a scratch canvas.
     probe = Image.new("RGBA", (8, 8))
     probe_draw = ImageDraw.Draw(probe)
-    text_pad = pad + (accent_w + 18 if not is_quote else 0)
-    inner_w = width - text_pad - pad
+    inner_w = width - pad * 2
     title_lines = _wrap_text(probe_draw, title, title_font, S(inner_w))[:4]
     if not title_lines:
         title_lines = [""]
 
-    height = pad * 2 + len(title_lines) * title_line_h
+    body_h = len(title_lines) * title_line_h
     if is_quote:
-        height += quote_mark_size + gap_quote_title
+        body_h += quote_mark_size + gap_quote_title
+    height = pad + header_h + gap_header_body + body_h + pad
 
     # Canvas with room for a soft drop shadow below the card body.
-    canvas = Image.new("RGBA", (S(width), S(height + 14)), (0, 0, 0, 0))
+    canvas = Image.new("RGBA", (S(width), S(height + shadow_pad)), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
 
-    # Drop shadow, then the near-opaque white card body.
+    # Soft drop shadow, then the clean near-opaque white card body.
     draw.rounded_rectangle(
-        [S(0), S(12), S(width - 1), S(height + 13)],
-        radius=S(CARD_CORNER_RADIUS), fill=(0, 0, 0, 70),
+        [S(0), S(10), S(width - 1), S(height + 9)],
+        radius=S(CARD_CORNER_RADIUS), fill=(0, 0, 0, 64),
     )
     draw.rounded_rectangle(
         [S(0), S(0), S(width - 1), S(height - 1)],
-        radius=S(CARD_CORNER_RADIUS), fill=(255, 255, 255, 243),
+        radius=S(CARD_CORNER_RADIUS), fill=(255, 255, 255, 247),
     )
 
-    dark = (15, 17, 21, 255)
-    muted = (113, 118, 123, 255)
+    # --- Header row: brand avatar tile + app name + muted handle ---------
+    ax, ay = S(pad), S(pad)
+    draw.rounded_rectangle(
+        [ax, ay, ax + S(avatar_size) - 1, ay + S(avatar_size) - 1],
+        radius=S(avatar_radius), fill=_CARD_BRAND,
+    )
+    _draw_centered_glyph(
+        draw, (ax, ay), S(avatar_size), "M", avatar_font, (255, 255, 255, 255)
+    )
+    text_x = S(pad + avatar_size + avatar_gap)
+    draw.text((text_x, S(pad + 1)), _CARD_APP_NAME, font=name_font, fill=_CARD_TEXT)
+    draw.text((text_x, S(pad + 32)), _CARD_APP_HANDLE, font=handle_font, fill=_CARD_MUTED)
 
+    # --- Body: the hookline (or the quoted line) --------------------------
+    y = pad + header_h + gap_header_body
     if is_quote:
         # Oversized decorative quote mark above the quoted text.
-        draw.text((S(pad), S(pad - 10)), "\u201C", font=quote_font, fill=muted)
-        y = S(pad + quote_mark_size + gap_quote_title)
-        for line in title_lines:
-            draw.text((S(pad), y), line, font=title_font, fill=dark)
-            y += S(title_line_h)
-    else:
-        # Bold hook headline with a violet accent strip on the left edge.
-        draw.rounded_rectangle(
-            [S(pad), S(pad), S(pad + accent_w), S(height - pad)],
-            radius=S(accent_w / 2), fill=_CARD_ACCENT,
-        )
-        y = S(pad)
-        for line in title_lines:
-            draw.text((S(text_pad), y), line, font=title_font, fill=dark)
-            y += S(title_line_h)
+        draw.text((S(pad - 2), S(y - 8)), "\u201C", font=quote_font, fill=_CARD_MUTED)
+        y += quote_mark_size + gap_quote_title
+    for line in title_lines:
+        draw.text((S(pad), S(y)), line, font=title_font, fill=_CARD_TEXT)
+        y += title_line_h
 
-    card = canvas.resize((width, height + 14), Image.LANCZOS)
+    card = canvas.resize((width, height + shadow_pad), Image.LANCZOS)
     card.save(out_path, format="PNG")
     return out_path
+
+
+def _fit_caption_font(draw, text: str, base_size: int):
+    """Largest caption font (<= base_size) whose stroked text fits the safe zone.
+
+    Kinetic frames are short (1-2 words), but wide glyph runs (all-caps
+    punchlines like ":FLAVOR EXTRACTS") can still outrun the 900px safe
+    zone and spill past the frame edges. The font size scales down
+    proportionally to the overflow until the stroked text fits (with a
+    floor so a frame never becomes illegibly small).
+    """
+    size = base_size
+    while True:
+        font = _load_font(size)
+        bbox = draw.textbbox(
+            (0, 0), text, font=font, stroke_width=CAPTION_STROKE_WIDTH
+        )
+        text_w = bbox[2] - bbox[0]
+        if text_w <= CAPTION_SAFE_WIDTH or size <= CAPTION_MIN_FONT_SIZE:
+            return font, bbox
+        size = max(
+            CAPTION_MIN_FONT_SIZE,
+            int(size * CAPTION_SAFE_WIDTH / text_w) - 1,
+        )
 
 
 def render_caption_pngs(
@@ -361,27 +427,37 @@ def render_caption_pngs(
     yellow pop. The compositor centers these PNGs in the middle of the
     vertical frame. PNGs are burned in with `overlay` filters, keeping
     the pipeline free of ffmpeg's optional drawtext filter.
+
+    Clipping guard: the stroked text is fitted to the centered safe zone
+    (CAPTION_SAFE_WIDTH of the frame width) by auto-scaling the font, and
+    the draw origin is clamped to non-negative x so glyph bearings and
+    stroke width can never push ink past the canvas edge.
     """
     from PIL import Image, ImageDraw
 
     pngs: List[Path] = []
     for i, frame in enumerate(frames):
-        font = _load_font(
+        base_size = (
             PUNCHLINE_FONT_SIZE if frame.is_punchline else CAPTION_FONT_SIZE
         )
         color = f"#{PUNCHLINE_COLOR}" if frame.is_punchline else CAPTION_COLOR
 
         # Measure with a scratch canvas, then draw the real one.
         probe = Image.new("RGBA", (8, 8))
-        draw = ImageDraw.Draw(probe)
-        bbox = draw.textbbox((0, 0), frame.words, font=font,
-                             stroke_width=CAPTION_STROKE_WIDTH)
+        probe_draw = ImageDraw.Draw(probe)
+        font, bbox = _fit_caption_font(probe_draw, frame.words, base_size)
         text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
 
         canvas = Image.new("RGBA", (settings.VIDEO_WIDTH, text_h + 40), (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
+        # Center on the frame; bbox[0]/bbox[1] compensate glyph bearings so
+        # the *ink* (stroke included) is what gets centered, and the clamp
+        # keeps the origin at non-negative coordinates.
         draw.text(
-            ((settings.VIDEO_WIDTH - text_w) / 2 - bbox[0], 20 - bbox[1]),
+            (
+                max(0.0, (settings.VIDEO_WIDTH - text_w) / 2 - bbox[0]),
+                20 - bbox[1],
+            ),
             frame.words,
             font=font,
             fill=color,
