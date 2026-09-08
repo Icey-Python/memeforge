@@ -7,7 +7,14 @@
 // provider switches the engine with it. Rows carry a per-voice preview
 // button so the free meme engines keep their instant auditions.
 
-import { Check, ChevronsUpDown, Loader2, Play, Search } from 'lucide-react';
+import {
+	Check,
+	ChevronsUpDown,
+	Loader2,
+	Play,
+	Search,
+	Square
+} from 'lucide-react';
 import {
 	type KeyboardEvent,
 	useEffect,
@@ -62,6 +69,14 @@ interface VoiceComboboxProps {
 	onPreview: (provider: TTSProviderId, voiceId: string) => void;
 	/** `provider:voiceId` key of the preview currently synthesizing. */
 	previewingKey: string | null;
+	/** `provider:voiceId` key of the preview audio currently playing. */
+	playingKey?: string | null;
+	/** Raw search text per keystroke (parent debounces + fetches remote). */
+	onSearchChange?: (query: string) => void;
+	/** Remote marketplace results merged into the searched list. */
+	remoteEntries?: VoiceCatalogEntry[];
+	/** Whether the remote marketplace search is in flight. */
+	remoteSearching?: boolean;
 	disabled?: boolean;
 	id?: string;
 }
@@ -74,6 +89,10 @@ export function VoiceCombobox({
 	onSelect,
 	onPreview,
 	previewingKey,
+	playingKey,
+	onSearchChange,
+	remoteEntries,
+	remoteSearching,
 	disabled,
 	id
 }: VoiceComboboxProps) {
@@ -90,8 +109,16 @@ export function VoiceCombobox({
 
 	const filtered = useMemo(() => {
 		const q = query.trim().toLowerCase();
-		return q ? catalog.filter((v) => matchesQuery(v, q)) : catalog;
-	}, [catalog, query]);
+		if (!q) return catalog;
+		const matches = catalog.filter((v) => matchesQuery(v, q));
+		// Remote marketplace entries bypass the local filter (the server
+		// already matched them); dedupe against locally-found ids.
+		const seen = new Set(matches.map((v) => `${v.provider}:${v.id}`));
+		const remote = (remoteEntries ?? []).filter(
+			(v) => !seen.has(`${v.provider}:${v.id}`)
+		);
+		return [...matches, ...remote];
+	}, [catalog, query, remoteEntries]);
 
 	// Grouped layout when browsing (no query); flat while searching. The
 	// active provider's group leads so its voices stay nearest.
@@ -193,6 +220,8 @@ export function VoiceCombobox({
 				</span>
 				{previewingKey === `${provider}:${value}` ? (
 					<Loader2 className="size-3.5 shrink-0 animate-spin text-zinc-400" />
+				) : playingKey === `${provider}:${value}` ? (
+					<Square className="size-3 shrink-0 text-orange-400" />
 				) : (
 					<ChevronsUpDown className="size-3.5 shrink-0 text-zinc-500" />
 				)}
@@ -208,6 +237,7 @@ export function VoiceCombobox({
 							onChange={(e) => {
 								setQuery(e.target.value);
 								setHighlight(0);
+								onSearchChange?.(e.target.value);
 							}}
 							onKeyDown={onKeyDown}
 							placeholder="Search voices, languages, tags..."
@@ -224,10 +254,21 @@ export function VoiceCombobox({
 					>
 						{rows.length === 0 && (
 							<p className="px-2 py-3 text-center text-xs text-zinc-500">
-								{query.trim()
-									? `No voices match "${query.trim()}"`
-									: 'No voices available yet.'}
+								{remoteSearching
+									? 'Searching the fish.audio marketplace...'
+									: query.trim()
+										? `No voices match "${query.trim()}"`
+										: 'No voices available yet.'}
 							</p>
+						)}
+						{remoteSearching && rows.length > 0 && (
+							<div
+								className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] text-zinc-500"
+								data-testid="voice-remote-searching"
+							>
+								<Loader2 className="size-3 animate-spin" />
+								Searching fish.audio...
+							</div>
 						)}
 						{groups
 							? groups.map(
@@ -258,6 +299,9 @@ export function VoiceCombobox({
 																previewingKey ===
 																`${entry.provider}:${entry.id}`
 															}
+															playing={
+																playingKey === `${entry.provider}:${entry.id}`
+															}
 															onHover={setHighlight}
 															onPick={pick}
 															onPreview={onPreview}
@@ -278,6 +322,7 @@ export function VoiceCombobox({
 										previewing={
 											previewingKey === `${entry.provider}:${entry.id}`
 										}
+										playing={playingKey === `${entry.provider}:${entry.id}`}
 										onHover={setHighlight}
 										onPick={pick}
 										onPreview={onPreview}
@@ -297,6 +342,7 @@ function ComboboxRow({
 	selected,
 	highlighted,
 	previewing,
+	playing,
 	previewDisabled,
 	onHover,
 	onPick,
@@ -307,6 +353,8 @@ function ComboboxRow({
 	selected: boolean;
 	highlighted: boolean;
 	previewing: boolean;
+	/** This row's preview audio is playing (click stops it). */
+	playing: boolean;
 	/** Any preview in flight: rows disable while audio synthesizes. */
 	previewDisabled: boolean;
 	onHover: (idx: number) => void;
@@ -355,10 +403,14 @@ function ComboboxRow({
 					onPreview(entry.provider, entry.id);
 				}}
 				disabled={previewDisabled}
-				aria-label={`Preview ${entry.label}`}
+				aria-label={
+					playing ? `Stop ${entry.label} preview` : `Preview ${entry.label}`
+				}
 			>
 				{previewing ? (
 					<Loader2 className="size-3 animate-spin" />
+				) : playing ? (
+					<Square className="size-3 text-orange-400" />
 				) : (
 					<Play className="size-3" />
 				)}

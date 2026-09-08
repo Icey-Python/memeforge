@@ -122,8 +122,10 @@ const VOICE_DEFAULTS: Record<TTSProviderId, string> = {
 	meme_classic: 'Brian',
 	tiktok: 'en_us_002',
 	google: 'en',
-	// Empty id -> Fish Audio's built-in default narrator (no reference_id).
-	fish_audio: '',
+	// Official Fish narrator: a real marketplace voice id, so every
+	// switch to Fish Audio starts pinned to one stable speaker (an empty
+	// id would make Fish randomize the voice per synthesized line).
+	fish_audio: '933563129e564b19a115bedd57b7406a',
 	azure: 'en-US-ChristopherNeural',
 	elevenlabs: '21m00Tcm4TlvDq8ikWAM'
 };

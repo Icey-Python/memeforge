@@ -62,10 +62,11 @@ export const MemeforgeAPI = {
 
 	async listVoices(
 		provider: TTSProviderId,
-		creds?: TTSCredentialParams
+		creds?: TTSCredentialParams,
+		search?: string
 	): Promise<VoiceOption[]> {
 		const { data } = await apiBase.get('/voices', {
-			params: { provider, ...creds }
+			params: { provider, search, ...creds }
 		});
 		return data;
 	},

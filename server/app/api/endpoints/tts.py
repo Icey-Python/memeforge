@@ -43,6 +43,13 @@ tts_router = APIRouter()
 @tts_router.get("/voices")
 async def list_voices(
     provider: TTSProvider = TTSProvider.edge,
+    search: Optional[str] = Query(
+        default=None,
+        description=(
+            "Live marketplace title search (Fish Audio); ignored by the "
+            "static-catalog engines"
+        ),
+    ),
     elevenlabs_api_key: Optional[str] = Query(
         default=None, description="ElevenLabs API key override (studio key vault)"
     ),
@@ -83,7 +90,9 @@ async def list_voices(
         fish_api_key,
     )
     try:
-        voices = await tts_registry.list_tts_voices(provider.value, **creds)
+        voices = await tts_registry.list_tts_voices(
+            provider.value, search=search, **creds
+        )
     except Exception as exc:
         raise HTTPException(502, detail=f"Voice listing failed: {exc}") from exc
     return [

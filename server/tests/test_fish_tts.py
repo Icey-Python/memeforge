@@ -146,7 +146,9 @@ def test_registry_includes_fish_audio():
     assert isinstance(provider, FishAudioTTSProvider)
     assert provider.name == "fish_audio"
     assert provider.model == "s2.1-pro"  # recommended production model
-    assert provider.voice == ""  # empty -> model default voice
+    # Unconfigured voice -> the official narrator (a stable marketplace
+    # id; an omitted reference_id would randomize the speaker per line).
+    assert provider.voice == fish_module.FISH_NARRATOR_VOICE
 
 
 def test_fish_model_selection_and_validation():
@@ -379,7 +381,9 @@ async def test_falls_back_to_batch_when_stream_yields_no_audio(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_batch_payload_omits_reference_and_prosody(monkeypatch):
+async def test_default_voice_sends_narrator_reference(monkeypatch):
+    """An empty voice resolves to the official narrator: every request
+    carries a reference_id so Fish never randomizes the speaker."""
     provider = FishAudioTTSProvider(api_key="k", voice="")
     fake = _patch_fish_http(
         monkeypatch,
@@ -391,8 +395,26 @@ async def test_batch_payload_omits_reference_and_prosody(monkeypatch):
     audio = await provider.synthesize("hello")
     assert audio.audio_bytes == b"mp3"
     payload = fake.calls[1]["json"]
-    assert "reference_id" not in payload  # default voice: omit the field
+    assert payload["reference_id"] == fish_module.FISH_NARRATOR_VOICE
     assert "prosody" not in payload  # neutral rate: omit the field
+
+
+@pytest.mark.asyncio
+async def test_synthesize_unconfigured_voice_uses_narrator(monkeypatch):
+    """The SSE (primary) path also rides the narrator reference_id."""
+    provider = FishAudioTTSProvider(api_key="k", voice=None)
+    fake = _patch_fish_http(
+        monkeypatch,
+        FakeFishClient(
+            stream_resp=FakeStreamResponse(
+                lines=[_sse({"audio_base64": _b64(b"mp3"), "chunk_seq": 0})]
+            )
+        ),
+    )
+    await provider.synthesize("hello")
+    assert (
+        fake.calls[0]["json"]["reference_id"] == fish_module.FISH_NARRATOR_VOICE
+    )
 
 
 @pytest.mark.asyncio
@@ -461,9 +483,11 @@ async def test_semaphore_sized_from_env(monkeypatch):
 def test_list_voices_curated_shortlist():
     voices = FishAudioTTSProvider(api_key="k").list_voices()
     ids = {v.id for v in voices}
-    assert "" in ids  # default narrator entry (no reference_id)
+    assert fish_module.FISH_NARRATOR_VOICE in ids  # default narrator entry
     assert "90e65eaaf50e4470b8e6d43ee6afd7d5" in ids  # Smash Bros Announcer
-    assert voices[0].id == ""  # default leads the catalog
+    assert voices[0].id == fish_module.FISH_NARRATOR_VOICE  # narrator leads
+    assert "" not in ids  # no empty-id entries: every voice is addressable
+    assert len(ids) == len(voices)  # no duplicate ids
     assert all(v.language == "en" for v in voices)
 
 
@@ -494,8 +518,12 @@ async def test_list_remote_voices_maps_marketplace_entities(monkeypatch):
 
     voices = await provider.list_remote_voices()
 
-    # The default narrator entry (empty id) leads the live listing too.
-    assert [v.id for v in voices] == ["", "id-1", "id-2"]
+    # The default narrator entry leads the trending listing.
+    assert [v.id for v in voices] == [
+        fish_module.FISH_NARRATOR_VOICE,
+        "id-1",
+        "id-2",
+    ]
     assert voices[1].label == "Smash Announcer"
     assert voices[1].gender == "male"
     assert voices[2].gender == "female"
@@ -504,11 +532,35 @@ async def test_list_remote_voices_maps_marketplace_entities(monkeypatch):
     call = fake.calls[0]
     assert call["params"]["sort_by"] == "score"
     assert call["headers"]["Authorization"] == "Bearer k"
-    # ...title filter when searching.
-    await provider.list_remote_voices(query="mario")
+    # ...title filter when searching (marketplace matches only, no
+    # narrator prepend — a search wants results, not defaults).
+    voices = await provider.list_remote_voices(query="mario")
+    assert [v.id for v in voices] == ["id-1", "id-2"]
     search_call = fake.calls[1]
     assert search_call["params"].get("title") == "mario"
     assert "sort_by" not in search_call["params"]
+
+
+@pytest.mark.asyncio
+async def test_list_remote_voices_dedupes_narrator(monkeypatch):
+    """A trending listing that already contains the narrator voice must
+    not duplicate the prepended default entry."""
+    provider = FishAudioTTSProvider(api_key="k")
+    payload = {
+        "items": [
+            {
+                "_id": fish_module.FISH_NARRATOR_VOICE,
+                "title": "Sarah",
+                "languages": ["en"],
+                "tags": ["female"],
+            }
+        ]
+    }
+    _patch_fish_http(
+        monkeypatch, FakeFishClient(get_resp=FakeResponse(payload=payload))
+    )
+    voices = await provider.list_remote_voices()
+    assert [v.id for v in voices] == [fish_module.FISH_NARRATOR_VOICE]
 
 
 @pytest.mark.asyncio
@@ -544,7 +596,10 @@ async def test_list_tts_voices_keyed_lists_remote(monkeypatch):
         monkeypatch, FakeFishClient(get_resp=FakeResponse(payload=payload))
     )
     voices = await list_tts_voices("fish_audio", fish_api_key="vault")
-    assert [v.id for v in voices] == ["", "remote-1"]  # default leads
+    assert [v.id for v in voices] == [
+        fish_module.FISH_NARRATOR_VOICE,
+        "remote-1",
+    ]  # default leads
 
 
 @pytest.mark.asyncio
@@ -557,7 +612,54 @@ async def test_list_tts_voices_keyed_degrades_to_shortlist(monkeypatch):
     _patch_fish_http(monkeypatch, fake)
     voices = await list_tts_voices("fish_audio", fish_api_key="vault")
     assert voices  # curated shortlist
-    assert voices[0].id == ""
+    assert voices[0].id == fish_module.FISH_NARRATOR_VOICE
+
+
+@pytest.mark.asyncio
+async def test_list_tts_voices_search_keyed_hits_marketplace(monkeypatch):
+    """An explicit search queries the live marketplace (page_size 50)."""
+    payload = {
+        "items": [
+            {
+                "_id": "mk-9",
+                "title": "Mario",
+                "languages": ["en"],
+                "tags": ["male"],
+            }
+        ]
+    }
+    fake = _patch_fish_http(
+        monkeypatch, FakeFishClient(get_resp=FakeResponse(payload=payload))
+    )
+    voices = await list_tts_voices("fish_audio", fish_api_key="vault", search="mario")
+    assert [v.id for v in voices] == ["mk-9"]
+    call = fake.calls[0]
+    assert call["params"]["title"] == "mario"
+    assert call["params"]["page_size"] == 50
+    assert "sort_by" not in call["params"]
+
+
+@pytest.mark.asyncio
+async def test_list_tts_voices_search_unkeyed_returns_empty(monkeypatch):
+    """Unkeyed searches return no results (never the curated shortlist)."""
+    monkeypatch.setattr(settings, "FISH_API_KEY", "")
+    fake = _patch_fish_http(monkeypatch, FakeFishClient())
+    assert await list_tts_voices("fish_audio", search="mario") == []
+    assert fake.calls == []
+
+
+@pytest.mark.asyncio
+async def test_list_tts_voices_search_failure_returns_empty(monkeypatch):
+    """A failing marketplace search yields [], not the shortlist."""
+    fake = FakeFishClient(get_resp=FakeResponse(status_code=500))
+    fake.get_resp.raise_for_status = lambda: (_ for _ in ()).throw(
+        httpx.HTTPError("boom")
+    )
+    _patch_fish_http(monkeypatch, fake)
+    voices = await list_tts_voices(
+        "fish_audio", fish_api_key="vault", search="mario"
+    )
+    assert voices == []
 
 
 # --- HTTP endpoints (integration) ----------------------------------------------------
@@ -624,7 +726,7 @@ def test_voices_endpoint_fish_shortlist_unkeyed(monkeypatch):
     assert resp.status_code == 200
     voices = resp.json()
     assert voices  # curated shortlist
-    assert voices[0]["id"] == ""  # default narrator leads
+    assert voices[0]["id"] == fish_module.FISH_NARRATOR_VOICE  # narrator leads
     assert all("tags" in v for v in voices)
 
 
@@ -649,8 +751,52 @@ def test_voices_endpoint_fish_keyed_via_header(monkeypatch):
         headers={"X-Fish-API-Key": "header-key"},
     )
     assert resp.status_code == 200
-    assert [v["id"] for v in resp.json()] == ["", "mk-1"]
+    assert [v["id"] for v in resp.json()] == [
+        fish_module.FISH_NARRATOR_VOICE,
+        "mk-1",
+    ]
     assert fake.calls[0]["headers"]["Authorization"] == "Bearer header-key"
+
+
+def test_voices_endpoint_fish_search_param(monkeypatch):
+    """?search= rides the marketplace query as a title filter."""
+    monkeypatch.setattr(settings, "FISH_API_KEY", "")
+    payload = {
+        "items": [
+            {
+                "_id": "smash-1",
+                "title": "Smash Announcer",
+                "languages": ["en"],
+                "tags": ["male"],
+            }
+        ]
+    }
+    fake = _patch_fish_http(
+        monkeypatch, FakeFishClient(get_resp=FakeResponse(payload=payload))
+    )
+    resp = client.get(
+        "/api/v1/voices",
+        params={
+            "provider": "fish_audio",
+            "search": "smash",
+            "fish_api_key": "vault",
+        },
+    )
+    assert resp.status_code == 200
+    assert [v["id"] for v in resp.json()] == ["smash-1"]
+    assert fake.calls[0]["params"]["title"] == "smash"
+    assert fake.calls[0]["params"]["page_size"] == 50
+
+
+def test_voices_endpoint_fish_search_unkeyed_empty(monkeypatch):
+    """Unkeyed search: 200 with no results (the picker shows the local
+    filter matches instead of a bogus shortlist)."""
+    monkeypatch.setattr(settings, "FISH_API_KEY", "")
+    resp = client.get(
+        "/api/v1/voices", params={"provider": "fish_audio", "search": "x"}
+    )
+    assert resp.status_code == 200
+    assert resp.json() == []
 
 
 def test_voices_endpoint_fish_header_wins_over_query(monkeypatch):

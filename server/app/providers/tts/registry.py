@@ -67,8 +67,14 @@ async def list_tts_voices(
     azure_speech_key: Optional[str] = None,
     azure_speech_region: Optional[str] = None,
     fish_api_key: Optional[str] = None,
+    search: Optional[str] = None,
 ) -> List[Voice]:
-    """Voices for the voice picker on the frontend voiceover node."""
+    """Voices for the voice picker on the frontend voiceover node.
+
+    `search` is a live marketplace title lookup (Fish Audio): explicit
+    searches never degrade to the curated shortlist — an unkeyed or
+    failing search returns [] instead of masquerading matches.
+    """
     provider = get_tts_provider(
         name,
         elevenlabs_api_key=elevenlabs_api_key,
@@ -79,6 +85,17 @@ async def list_tts_voices(
     if isinstance(provider, ElevenLabsProvider):
         return await provider.list_remote_voices()
     if isinstance(provider, FishAudioTTSProvider):
+        term = (search or "").strip()
+        if term:
+            # Live marketplace search across the full public library.
+            if not provider.is_configured():
+                return []
+            try:
+                return await provider.list_remote_voices(
+                    query=term, page_size=50
+                )
+            except Exception:  # noqa: BLE001 - a failed search yields no
+                return []  # results, not the curated shortlist
         # Keyed: live marketplace listing (degrading to the curated
         # shortlist when the listing call fails). Unkeyed: shortlist.
         if provider.is_configured():
