@@ -1,26 +1,47 @@
-# memeforge
+<div align="center">
+  <a href="https://github.com/Icey-Python/memeforge">
+    <img src="assets/logo.svg" width="84" alt="memeforge logo" />
+  </a>
+  <h1>memeforge</h1>
+  <p>
+    <strong>AI vertical video generator</strong><br />
+    Topic in, Short out: LLM script, natural voiceover, kinetic captions, full-screen background.
+  </p>
+  <p>
+    <a href="#quickstart"><img src="https://img.shields.io/badge/Backend-FastAPI-18181b?style=for-the-badge&logo=fastapi&logoColor=f97316" alt="Backend: FastAPI" /></a>
+    <a href="#quickstart"><img src="https://img.shields.io/badge/Studio-Next.js_16-18181b?style=for-the-badge&logo=nextdotjs&logoColor=f97316" alt="Studio: Next.js 16" /></a>
+    <a href="#docker"><img src="https://img.shields.io/badge/Deploy-Docker-18181b?style=for-the-badge&logo=docker&logoColor=f97316" alt="Deploy: Docker" /></a>
+    <img src="https://img.shields.io/badge/Output-1080%C3%971920-f97316?style=for-the-badge" alt="Output: 1080x1920 vertical video" />
+  </p>
+  <p>
+    <img src="https://img.shields.io/badge/Fish_Audio_TTS-SSE_word_timestamps-f97316?labelColor=18181b" alt="Fish Audio TTS with SSE word timestamps" />
+    <img src="https://img.shields.io/badge/Brand_hook_card-hook_or_quote-f97316?labelColor=18181b" alt="Brand hook card: hook or quote" />
+    <img src="https://img.shields.io/badge/Searchable_voices-7_TTS_engines-f97316?labelColor=18181b" alt="Searchable voice catalog across 7 TTS engines" />
+    <img src="https://img.shields.io/badge/Kinetic_captions-safe_zone_autofit-f97316?labelColor=18181b" alt="Kinetic captions with safe-zone autofit" />
+  </p>
+</div>
 
 AI vertical video generator. Turn a topic — or your own pasted script —
 into a vertical 1080×1920 short-form video: full-screen background
 loop, an optional hook headline or quote card, kinetic captions, free
 voiceover. Built for YouTube Shorts, TikTok, and Reels pacing.
 
+## Made with memeforge
 
+| [![Sample 1](assets/demo/sample-1.jpg)](assets/demo/sample-1.mp4) | [![Sample 2](assets/demo/sample-2.jpg)](assets/demo/sample-2.mp4) | [![Sample 3](assets/demo/sample-3.jpg)](assets/demo/sample-3.mp4) |
+| :---: | :---: | :---: |
+| Sample 1 · 0:29 | Sample 2 · 0:34 | Sample 3 · 0:29 |
 
-https://github.com/user-attachments/assets/7e9c4c7c-b85a-4174-bae1-7a0295c6e780
-
-
-
-https://github.com/user-attachments/assets/fa564d12-830d-41b2-98e5-09c7ea44e1a6
-
-
+Click a card to watch the full 1080×1920 render. All three were
+generated end-to-end by the pipeline: LLM script, TTS voiceover,
+kinetic captions, background loop.
 
 ## Monorepo layout
 
 | Path | What |
 | --- | --- |
 | `web/` | Next.js 16 App Router studio — React Flow canvas with modular nodes (Model Connector → Topic → Script → Voiceover → Preview, plus Gameplay), dark sleek UI |
-| `server/` | FastAPI backend — LLM script generation (OpenAI-compatible / Ollama / mock), TTS (edge-tts free default, Meme Classic with Brian & the iconic meme voices, TikTok with auto-fallback, Google Translate, Azure, ElevenLabs), async ffmpeg render jobs |
+| `server/` | FastAPI backend — LLM script generation (OpenAI-compatible / Ollama / mock), TTS (edge-tts free default, Meme Classic with Brian & the iconic meme voices, TikTok with auto-fallback, Google Translate, Fish Audio with SSE word timestamps, Azure, ElevenLabs), async ffmpeg render jobs |
 
 ## Quickstart
 
@@ -79,11 +100,12 @@ when its unofficial endpoints reject anonymous calls.
 
 ### Background clips
 
-Render requires a background loop. Drop `<id>.mp4` files into
-`server/assets/gameplay/` (e.g. `minecraft-parkour.mp4`) — the studio's
-Gameplay node flips to `CLIP READY` automatically. Long clips (5+ min)
-get a random seek in-point per render so repeated renders surface fresh
-footage. Optional punchline SFX goes in `server/assets/sfx/`.
+Render requires a background: either a gameplay loop or auto-selected
+stock clips. Drop `<id>.mp4` files into `server/assets/gameplay/`
+(e.g. `minecraft-parkour.mp4`) — the studio's Gameplay node flips to
+`CLIP READY` automatically. Long clips (5+ min) get a random seek
+in-point per render so repeated renders surface fresh footage. Optional
+punchline SFX goes in `server/assets/sfx/`.
 `server/scripts/fetch-gameplay.sh` can pull public-domain clips.
 
 ## The studio pipeline
@@ -95,10 +117,12 @@ footage. Optional punchline SFX goes in `server/assets/sfx/`.
 3. **Script** — generated or pasted; every line editable, reorderable, and
    removable, with live word count + spoken-length estimate. The 60s default
    targets ~140 words (~2.3 words/sec), the sweet spot for Shorts/TikTok/Reels
-4. **Voiceover / TTS** — provider + voice, free by default (Meme Classic
-   Brian & friends and TikTok meme voices come with direct per-voice
-   previews)
-5. **Gameplay / Background** — pick a background clip with asset status
+4. **Voiceover / TTS** — one searchable voice catalog across all seven engines
+   (including live Fish Audio marketplace search) with inline per-voice
+   previews; free by default (Meme Classic Brian & friends, edge-tts)
+5. **Gameplay / Background** — pick a gameplay loop, or let the Stock tab
+   auto-select a keyword-driven clip sequence for the script (fast-cut
+   montage optional)
 6. **Preview & Export** — readiness checklist, top-card style (hook / quote /
    clean), render → inline player
 
@@ -110,8 +134,10 @@ footage. Optional punchline SFX goes in `server/assets/sfx/`.
 | `GET /api/v1/models` | available LLM providers |
 | `POST /api/v1/models/discover` | live model list for a provider (Ollama `/api/tags`, OpenAI-compatible `/v1/models`) |
 | `POST /api/v1/generate-script` | topic + duration target → short-form script (mock/openai-compatible/ollama) |
-| `GET /api/v1/voices?provider=edge` | TTS voice catalog (`edge\|meme_classic\|tiktok\|google\|azure\|elevenlabs`) |
+| `GET /api/v1/voices?provider=edge` | TTS voice catalog (`edge\|meme_classic\|tiktok\|google\|fish_audio\|azure\|elevenlabs`) |
 | `POST /api/v1/tts` | synthesize one line → audio url |
+| `GET /api/v1/stock/search` | Pexels / Pixabay portrait clip search |
+| `POST /api/v1/stock/auto-select` | keyword round-robin clip sequence for the script |
 | `GET /api/v1/render/gameplays` | background clip catalog + availability |
 | `POST /api/v1/render` | queue a render job (async; `card_style`: hook/quote/none) |
 | `GET /api/v1/render/{job_id}` | poll job progress → `video_url` |
@@ -121,12 +147,18 @@ Interactive docs: http://localhost:8000/docs.
 ## Architecture notes
 
 - **Render pipeline** — per-line TTS → duration probing (ffprobe) → caption
-  timeline → Pillow caption PNGs + optional headline/quote card → ffmpeg
+  timeline → Pillow caption PNGs + optional brand hook card (orange M tile,
+  Memeforge header row, hookline body; fades out after the hook) → ffmpeg
   full-screen `overlay` compositor (background fills the whole 1080×1920
-  frame; the card floats upper-center and fades after the hook; long clips
-  start at a random seek) → H.264. Captions deliberately avoid ffmpeg's
-  optional `drawtext` filter (absent from Homebrew builds) — works on any
-  ffmpeg.
+  frame; the card floats upper-center; long clips start at a random seek) →
+  H.264. Kinetic captions auto-fit inside a centered 900px safe zone with
+  font scaling, so no word ever clips the frame edge. Captions deliberately
+  avoid ffmpeg's optional `drawtext` filter (absent from Homebrew builds) —
+  works on any ffmpeg.
+- **Voice sync** — line durations always come from probed audio, never
+  estimates. edge-tts word boundaries and Fish Audio's SSE stream
+  (`/v1/tts/stream/with-timestamp`, per-chunk word timestamps) drive per-word
+  caption timing; other engines fall back to even word spacing.
 - **Duration pacing** — script generation takes a `duration_target`
   (default 60s). Word budgets use ~2.2–2.5 words/sec of speech (60s ≈
   130–150 words) and line counts ~4s of speech per line.
