@@ -297,6 +297,15 @@ def test_build_headline_card_brand_header(tmp_path: Path):
             for y in range(40, 100, 4)
             for p in [im.getpixel((x, y))]
         ), "no dark app-name text next to the avatar"
+        # Handle text: muted clean slate grey (#64748b / (100, 116, 139)).
+        assert any(
+            abs(p[0] - 100) < 12
+            and abs(p[1] - 116) < 12
+            and abs(p[2] - 139) < 12
+            for x in range(110, 340, 2)
+            for y in range(66, 96, 2)
+            for p in [im.getpixel((x, y))]
+        ), "no slate handle text in the header row"
         # The violet accent strip from the old design is fully gone.
         assert not any(
             abs(p[0] - 139) < 40 and abs(p[1] - 92) < 40 and abs(p[2] - 246) < 40

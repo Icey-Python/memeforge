@@ -264,9 +264,9 @@ def _wrap_text(draw, text: str, font, max_width: int) -> List[str]:
 
 # Brand palette for the card's app-header row. The avatar tile uses the
 # studio accent orange; text stays dark-on-white for high contrast.
-_CARD_BRAND = (249, 115, 22, 255)   # avatar tile: memeforge orange
-_CARD_TEXT = (15, 17, 21, 255)      # near-black headline / app name
-_CARD_MUTED = (113, 118, 123, 255)  # handle / quote mark gray
+_CARD_BRAND = (249, 115, 22, 255)   # avatar tile: memeforge orange (#f97316)
+_CARD_TEXT = (15, 17, 21, 255)      # near-black headline / app name (#0f172a)
+_CARD_MUTED = (100, 116, 139, 255)  # handle / quote mark gray (#64748b slate)
 _CARD_APP_NAME = "Memeforge"
 _CARD_APP_HANDLE = "@memeforge"
 
