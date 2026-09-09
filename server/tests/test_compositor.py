@@ -13,7 +13,7 @@ import random
 from pathlib import Path
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageStat
 
 from app.core import settings
 from app.providers.tts.base import WordTiming
@@ -297,6 +297,15 @@ def test_build_headline_card_brand_header(tmp_path: Path):
             for y in range(40, 100, 4)
             for p in [im.getpixel((x, y))]
         ), "no dark app-name text next to the avatar"
+        # Handle text: muted clean slate grey (#64748b / (100, 116, 139)).
+        assert any(
+            abs(p[0] - 100) < 12
+            and abs(p[1] - 116) < 12
+            and abs(p[2] - 139) < 12
+            for x in range(110, 340, 2)
+            for y in range(66, 96, 2)
+            for p in [im.getpixel((x, y))]
+        ), "no slate handle text in the header row"
         # The violet accent strip from the old design is fully gone.
         assert not any(
             abs(p[0] - 139) < 40 and abs(p[1] - 92) < 40 and abs(p[2] - 246) < 40
@@ -304,6 +313,57 @@ def test_build_headline_card_brand_header(tmp_path: Path):
             for y in range(0, im.height, 6)
             for p in [im.getpixel((x, y))]
         ), "violet accent remnant found"
+
+
+def test_build_headline_card_pastes_flame_logo_asset(tmp_path: Path):
+    """The real flame logo asset (server/assets/logo.png, rasterized from
+    the favicon SVG) is pasted onto the avatar tile: dark flame mark on
+    the orange square — no hand-drawn white M, no fallback ember."""
+    out = build_headline_card("Hot take incoming", tmp_path / "card.png")
+    with Image.open(out) as im:
+        # Interior of the 56px tile at (40,40), clear of the rounded corners.
+        region = [
+            im.getpixel((x, y)) for x in range(46, 90, 2) for y in range(46, 90, 2)
+        ]
+        # Dark flame mark from the logo asset.
+        assert any(
+            p[0] < 70 and p[1] < 70 and p[2] < 70 and p[3] > 200 for p in region
+        ), "no dark flame mark in the avatar tile"
+        # Neither the old white M glyph nor the fallback's cream ember.
+        assert not any(
+            p[0] > 225 and p[1] > 200 and p[2] > 170 and p[3] > 200 for p in region
+        ), "hand-drawn glyph/ember remnant in the avatar tile"
+        # The pasted tile matches the asset itself (interior means).
+        asset = Image.open(settings.ASSETS_DIR / "logo.png").convert("RGBA")
+        tile = asset.resize((56, 56), Image.LANCZOS)
+        card_mean = ImageStat.Stat(im.crop((46, 46, 90, 90))).mean
+        asset_mean = ImageStat.Stat(tile.crop((6, 6, 50, 50))).mean
+        assert all(
+            abs(a - b) < 25 for a, b in zip(card_mean, asset_mean)
+        ), f"avatar tile != logo asset: {card_mean} vs {asset_mean}"
+
+
+def test_build_headline_card_avatar_fallback(tmp_path: Path, monkeypatch):
+    """A missing logo asset falls back smoothly to the hand-drawn avatar."""
+    monkeypatch.setattr(
+        "app.services.rendering.compositor._LOGO_PATH", tmp_path / "missing.png"
+    )
+    out = build_headline_card("Hot take incoming", tmp_path / "card.png")
+    assert out.exists() and out.stat().st_size > 2_000
+    with Image.open(out) as im:
+        region = [
+            im.getpixel((x, y)) for x in range(46, 90, 2) for y in range(46, 90, 2)
+        ]
+        # Orange tile still present...
+        assert any(
+            abs(p[0] - 249) < 30 and abs(p[1] - 115) < 30 and abs(p[2] - 22) < 30
+            for p in region
+        ), "no orange avatar tile in fallback"
+        # ...and the fallback's cream ember proves the hand-drawn path ran.
+        assert any(
+            abs(p[0] - 255) < 30 and abs(p[1] - 237) < 30 and abs(p[2] - 213) < 30
+            for p in region
+        ), "fallback ember not drawn"
 
 
 def test_build_headline_card_rejects_unknown_style(tmp_path: Path):
