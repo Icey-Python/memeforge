@@ -25,8 +25,9 @@ from app.providers.stock.keywords import heuristic_keywords
 from app.schemas.render_schema import StockClipRef, StockVideoResult
 
 # Fallback spoken pace (words/sec) when no duration is supplied —
-# mirrors the frontend's estimateSpokenSeconds.
-_WORDS_PER_SEC = 2.4
+# mirrors the frontend's estimateSpokenSeconds
+# (web/src/lib/script-split.ts) and the backend's word_target budgets.
+_WORDS_PER_SEC = 2.5
 # Candidates fetched per keyword search (variety for shuffle/refresh).
 _PER_PAGE = 6
 # Hard floor on clip length: shorter sources cannot fill a 1.5s cut.
@@ -36,7 +37,7 @@ _MAX_KEYWORDS = 14
 
 
 def estimate_duration_s(script: Sequence[str]) -> float:
-    """Spoken-length estimate for a script (~2.4 words/sec of speech)."""
+    """Spoken-length estimate for a script (~2.5 words/sec of speech)."""
     words = sum(len(line.split()) for line in script if line.strip())
     return max(10.0, words / _WORDS_PER_SEC)
 

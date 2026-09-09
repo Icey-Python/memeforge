@@ -493,15 +493,15 @@ export const TONE_OPTIONS = [
 	{ id: 'hype', label: 'Hype commentator' }
 ];
 
-/** Target duration presets: ~2.3 words/sec of spoken speech. */
+/** Target duration presets: ~2.5 words/sec of spoken speech. */
 export const DURATION_OPTIONS: {
 	value: DurationTarget;
 	label: string;
 	hint: string;
 }[] = [
-	{ value: 30, label: '30 seconds', hint: '~70 words' },
-	{ value: 60, label: '60 seconds (default)', hint: '~140 words' },
-	{ value: 90, label: '90 seconds', hint: '~210 words' }
+	{ value: 30, label: '30 seconds', hint: '~75 words' },
+	{ value: 60, label: '60 seconds (default)', hint: '~150 words' },
+	{ value: 90, label: '90 seconds', hint: '~220 words' }
 ];
 
 /** Top card overlay presets (rendered by the backend compositor). */

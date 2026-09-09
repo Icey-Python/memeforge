@@ -67,10 +67,10 @@ async def generate_script(request: ScriptGenerateRequest):
     """Generate a short-form video script about a topic with the selected
     model connector.
 
-    `duration_target` paces the script: word budgets target ~2.2-2.5
-    words/sec of speech, so the 60s default yields ~130-150 words —
-    about a minute of speech. `max_lines` defaults to a duration-derived
-    pacing (~4s of speech per line) when omitted.
+    `duration_target` paces the script: word budgets target ~2.3-2.7
+    words/sec of speech, so the 60s default yields ~135-165 words
+    (~150) — a full minute of speech. `max_lines` defaults to a
+    duration-derived pacing (~4s of speech per line) when omitted.
     """
     provider = llm_registry.get_llm_provider(
         request.provider.value,

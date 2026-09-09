@@ -18,8 +18,9 @@ const DEFAULTS: Required<SplitScriptOptions> = {
 	minWordsPerLine: 3
 };
 
-/** ~140 wpm spoken pace — matches the backend's word_target budgets. */
-export const WORDS_PER_SECOND = 2.4;
+/** ~150 wpm spoken pace — matches the backend's word_target budgets
+ * (60s target ≈ 150 words). */
+export const WORDS_PER_SECOND = 2.5;
 
 /** Inline TTS delivery tags a script line may carry (mirrors the backend
  * EMOTION_TAGS in server/app/providers/tts/base.py). Fish Audio reads

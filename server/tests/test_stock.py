@@ -749,7 +749,7 @@ def test_auto_select_builds_keyword_timed_sequence(monkeypatch):
 
 def test_auto_select_derives_keywords_and_duration_from_script(monkeypatch):
     """No keywords: the heuristic extracts them; duration follows the
-    script's word count (~2.4 words/sec)."""
+    script's word count (~2.5 words/sec)."""
     provider = FakeMontageProvider(
         {
             kw: [_clip("pexels", kw, kw)]
@@ -771,9 +771,9 @@ def test_auto_select_derives_keywords_and_duration_from_script(monkeypatch):
     body = resp.json()
     assert len(body["keywords"]) >= 6
     assert any("pizza" in k for k in body["keywords"])
-    # 60 words / 2.4 wps = 25s → ceil(25 / 2.25) = 12 segments.
-    assert body["segments_needed"] == 12
-    assert body["duration_s"] == pytest.approx(25.0)
+    # 60 words / 2.5 wps = 24s → ceil(24 / 2.25) = 11 segments.
+    assert body["segments_needed"] == 11
+    assert body["duration_s"] == pytest.approx(24.0)
     assert len(body["clips"]) > 0
 
 

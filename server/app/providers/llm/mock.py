@@ -2,8 +2,10 @@
 
 Deterministic, offline script generator used for local development and
 tests so the pipeline works end-to-end without any model or API key.
-Scripts are paced to the requested duration target (~2.2-2.5 words/sec
-of speech), so a 60-second target yields ~130-150 words.
+Scripts are paced to the requested duration target (~2.3-2.7 words/sec
+of speech), so a 60-second target yields ~150 words across ~15
+complete spoken sentences — a full minute of audio, mirroring what
+the LLM prompts ask real models for.
 """
 
 import random
@@ -27,24 +29,28 @@ _OPENERS = [
 _BODY = [
     "First off, {topic} is not a phase, it's a lifestyle.",
     "My whole personality is basically {topic} at this point.",
-    "I told my squad about {topic} and now none of them talk to me.",
-    "They said {topic} builds character. They lied.",
+    "I told my squad about {topic} and now they avoid me.",
+    "They said {topic} builds character, and honestly they lied.",
     "Every day I wake up and choose {topic} violence.",
-    "Nobody: ... Me: anyway, {topic}.",
+    "Nobody asked for my {topic} opinion, and yet here we are.",
     "Sleep is temporary, {topic} is forever.",
     "The tutorial never prepared me for {topic}.",
-    "My search history is just {topic} and regret.",
+    "My search history is just {topic} and pure regret.",
     "I have three hobbies and all of them are {topic}.",
-    "My therapist says I lean on {topic} too much.",
+    "My therapist says I lean on {topic} way too much.",
     "We do not talk about the {topic} incident.",
     "Studies show {topic} improves nothing except vibes.",
-    "Half my screen time is {topic} content.",
+    "Half my screen time is just {topic} content.",
     "Nobody warned me {topic} would be this expensive.",
     "{topic} walked so my sleep schedule could collapse.",
     "I would trade my lunch for {topic}, and I love lunch.",
-    "Every group project needs one {topic} person. I'm it.",
+    "Every group project needs one {topic} person, and I'm it.",
     "My camera roll is nine thousand {topic} screenshots.",
     "The {topic} grind never stops, and neither do I.",
+    "If loving {topic} is wrong, I refuse to be right.",
+    "My bank account is filing a formal complaint about {topic}.",
+    "Somewhere out there, {topic} is studying my weaknesses.",
+    "I don't have a {topic} problem, I have a lifestyle.",
 ]
 
 _CLOSERS = [
@@ -101,17 +107,28 @@ class MockLLMProvider(BaseLLMProvider):
         words = len(opener.split())
 
         # Fill the body until the word budget (or the line cap) is hit.
+        # Templates are picked to keep the running average on pace for
+        # the budget midpoint across the remaining line slots, so the
+        # final script lands inside (w_min, w_max) instead of drifting
+        # short like an unguided pick would.
         body_pool = [t.format(topic=topic) for t in _BODY]
         rng.shuffle(body_pool)
         while len(lines) < max(2, max_lines - 1) and words < target_words:
             if not body_pool:
                 body_pool = [t.format(topic=topic) for t in _BODY]
                 rng.shuffle(body_pool)
-            body = body_pool.pop()
+            # Line slots left, reserving one for the closer.
+            remaining_slots = max(2, max_lines - len(lines))
+            pace = (target_words - words) / remaining_slots
+            body_pool.sort(key=lambda t: abs(len(t.split()) - pace))
+            body = body_pool.pop(0)
             lines.append(body)
             words += len(body.split())
 
-        closer = rng.choice(_CLOSERS)
+        # The closer tops the total off closest to the budget midpoint.
+        closer = min(
+            _CLOSERS, key=lambda c: abs(words + len(c.split()) - target_words)
+        )
         lines.append(closer)
         # Deterministic visual keyword set (>= 10): the topic's key words
         # formatted through stock-search-friendly templates, in seeded

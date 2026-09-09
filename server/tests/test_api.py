@@ -3,6 +3,11 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.providers.llm.base import (
+    default_line_count,
+    prompt_budget,
+    word_target,
+)
 from app.providers.llm.mock import MockLLMProvider
 
 client = TestClient(app)
@@ -33,8 +38,28 @@ def test_generate_script_mock():
     assert body["lines"][-1]["is_punchline"] is True
 
 
+def test_duration_pacing_calibration():
+    """The pacing helpers pin the studio duration presets exactly."""
+    # Word budgets: 60s needs a full ~150 words of speech so the
+    # rendered video actually runs a minute (30s/90s scale likewise).
+    assert word_target(30) == (65, 80)
+    assert word_target(60) == (135, 165)
+    assert word_target(90) == (205, 240)
+    # Non-preset durations still get a scaled budget.
+    w_min, w_max = word_target(120)
+    assert 120 * 2.2 <= w_min <= w_max <= 120 * 2.8
+    # Line pacing: ~4s of speech per line.
+    assert default_line_count(30) == 8
+    assert default_line_count(60) == 15
+    assert default_line_count(90) == 23
+    # Prompt-facing bands: tight inner word band + explicit line range.
+    assert prompt_budget(30) == (70, 80, 7, 9)
+    assert prompt_budget(60) == (140, 160, 14, 17)
+    assert prompt_budget(90) == (210, 230, 21, 25)
+
+
 def test_generate_script_duration_targets():
-    """60s default ≈ 130-150 words; 30s paces to roughly half."""
+    """Each duration preset lands in its word and line budget."""
 
     def words(payload):
         resp = client.post("/api/v1/generate-script", json=payload)
@@ -51,12 +76,16 @@ def test_generate_script_duration_targets():
         {"topic": "elden ring", "provider": "mock", "duration_target": 90}
     )
 
-    # Word budget scales with the duration target (2.2-2.5 words/sec).
-    assert 60 <= w30 <= 90  # ~70 words
-    assert 120 <= w60 <= 160  # ~141 words (the classic short-form pacing)
+    # Word budgets scale with the duration target (~2.3-2.7 words/sec):
+    # a 60s target fills a full minute of TTS audio, not ~30s.
+    assert 65 <= w30 <= 80  # ~75 words
+    assert 135 <= w60 <= 165  # ~150 words (the classic short-form pacing)
+    assert 205 <= w90 <= 240  # ~220 words
     assert w90 >= w60 > w30
-    # Line pacing: ~4s of speech per line (capped by max_lines default).
-    assert l30 < l60 <= 15 <= l90
+    # Line pacing: ~4s of speech per line, each line a full sentence.
+    assert 7 <= l30 <= 9
+    assert 14 <= l60 <= 17
+    assert 21 <= l90 <= 25
 
 
 def test_generate_script_rejects_bad_duration_target():
