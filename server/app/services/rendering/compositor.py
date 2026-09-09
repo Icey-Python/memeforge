@@ -6,7 +6,7 @@ short in the classic viral layout:
 
     ┌───────────────────────────────┐
     │   ╭─────────────────────╮     │  floating headline card
-    │   │ [M] Memeforge       │     │  (brand card: avatar + name
+    │   │ [▲] Memeforge       │     │  (brand card: avatar + name
     │   │     @memeforge      │     │  + handle row, then the
     │   │  HOOK HEADLINE TEXT │     │  hookline in dark type), or
     │   │  OR QUOTED LINE     │     │  a quote card with an
@@ -270,6 +270,25 @@ _CARD_MUTED = (100, 116, 139, 255)  # handle / quote mark gray (#64748b slate)
 _CARD_APP_NAME = "Memeforge"
 _CARD_APP_HANDLE = "@memeforge"
 
+# Official flame logo tile for the avatar: assets/logo.svg (the app
+# favicon) rasterized to assets/logo.png at 512px, e.g.
+#   magick -background none -density 1152 assets/logo.svg \
+#       -resize 512x512 assets/logo.png
+_LOGO_PATH = settings.ASSETS_DIR / "logo.png"
+
+
+def _load_logo_asset():
+    """The official Memeforge flame logo tile (orange rounded square with
+    the dark flame mark) as an RGBA image, or None when the asset is
+    missing or unreadable — callers then draw the fallback avatar."""
+    try:
+        from PIL import Image
+
+        with Image.open(_LOGO_PATH) as im:
+            return im.convert("RGBA")
+    except (OSError, ValueError):
+        return None
+
 
 def _draw_brand_avatar(draw, xy, size, radius) -> None:
     """Draw the official Memeforge flame logo avatar tile."""
@@ -308,8 +327,8 @@ def build_headline_card(
     """Render the floating top card as a transparent PNG.
 
     A clean white rounded card with a soft drop shadow, styled like a
-    brand post: the top row carries the Memeforge app avatar (orange
-    tile with an M), the app name and a muted handle — no checkmarks,
+    brand post: the top row carries the Memeforge app avatar (the
+    flame logo tile), the app name and a muted handle — no checkmarks,
     no social action bar, no timestamp. The body renders the hookline
     in dark high-contrast type with generous padding and clean word
     wrapping. Two styles:
@@ -353,7 +372,6 @@ def build_headline_card(
     quote_font = _load_font(S(quote_mark_size))
     name_font = _load_font(S(27))
     handle_font = _load_font(S(20))
-    avatar_font = _load_font(S(34))
 
     # Measure text with a scratch canvas.
     probe = Image.new("RGBA", (8, 8))
@@ -384,7 +402,16 @@ def build_headline_card(
 
     # --- Header row: brand avatar tile + app name + muted handle ---------
     ax, ay = S(pad), S(pad)
-    _draw_brand_avatar(draw, (ax, ay), S(avatar_size), S(avatar_radius))
+    logo = _load_logo_asset()
+    if logo is not None:
+        # The official flame logo tile, pasted into the avatar spot.
+        tile = logo.resize(
+            (int(S(avatar_size)), int(S(avatar_size))), Image.LANCZOS
+        )
+        canvas.alpha_composite(tile, (int(ax), int(ay)))
+    else:
+        # Asset unavailable: fall back to the hand-drawn flame avatar.
+        _draw_brand_avatar(draw, (ax, ay), S(avatar_size), S(avatar_radius))
     text_x = S(pad + avatar_size + avatar_gap)
     draw.text((text_x, S(pad + 1)), _CARD_APP_NAME, font=name_font, fill=_CARD_TEXT)
     draw.text((text_x, S(pad + 32)), _CARD_APP_HANDLE, font=handle_font, fill=_CARD_MUTED)
