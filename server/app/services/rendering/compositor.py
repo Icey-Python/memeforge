@@ -271,16 +271,32 @@ _CARD_APP_NAME = "Memeforge"
 _CARD_APP_HANDLE = "@memeforge"
 
 
-def _draw_centered_glyph(draw, xy, size, text, font, fill) -> None:
-    """Draw `text` centered inside the `size`-square at `xy` (2x coords)."""
-    bbox = draw.textbbox((0, 0), text, font=font)
-    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    draw.text(
-        (xy[0] + (size - w) / 2 - bbox[0], xy[1] + (size - h) / 2 - bbox[1]),
-        text,
-        font=font,
-        fill=fill,
+def _draw_brand_avatar(draw, xy, size, radius) -> None:
+    """Draw the official Memeforge flame logo avatar tile."""
+    x, y = xy
+    draw.rounded_rectangle(
+        [x, y, x + size - 1, y + size - 1],
+        radius=radius,
+        fill=_CARD_BRAND,
     )
+    # The dark flame symbol drawn from the SVG path spec
+    scale = size / 64.0
+    flame_points = [
+        (32, 12), (33, 16), (32, 19), (29, 21), (26, 25), (26, 30),
+        (27, 33), (29, 35.5), (32, 36), (35, 35.5), (37, 33), (38, 30),
+        (38, 28), (37, 26), (36, 24), (36, 22), (38, 24), (41, 27),
+        (44, 32), (44, 37), (42, 43), (38, 47), (32, 48), (26, 47),
+        (22, 43), (20, 37), (20, 31), (22, 26), (26, 21), (30, 16),
+        (32, 12)
+    ]
+    scaled_flame = [(x + px * scale, y + py * scale) for px, py in flame_points]
+    draw.polygon(scaled_flame, fill=(9, 9, 11, 240))
+    # Inner flame ember
+    inner_ember = [
+        (32, 28), (34, 31), (35, 34), (34, 37), (32, 39), (30, 37), (29, 34), (30, 31), (32, 28)
+    ]
+    scaled_ember = [(x + px * scale, y + py * scale) for px, py in inner_ember]
+    draw.polygon(scaled_ember, fill=(255, 237, 213, 220))
 
 
 def build_headline_card(
@@ -368,13 +384,7 @@ def build_headline_card(
 
     # --- Header row: brand avatar tile + app name + muted handle ---------
     ax, ay = S(pad), S(pad)
-    draw.rounded_rectangle(
-        [ax, ay, ax + S(avatar_size) - 1, ay + S(avatar_size) - 1],
-        radius=S(avatar_radius), fill=_CARD_BRAND,
-    )
-    _draw_centered_glyph(
-        draw, (ax, ay), S(avatar_size), "M", avatar_font, (255, 255, 255, 255)
-    )
+    _draw_brand_avatar(draw, (ax, ay), S(avatar_size), S(avatar_radius))
     text_x = S(pad + avatar_size + avatar_gap)
     draw.text((text_x, S(pad + 1)), _CARD_APP_NAME, font=name_font, fill=_CARD_TEXT)
     draw.text((text_x, S(pad + 32)), _CARD_APP_HANDLE, font=handle_font, fill=_CARD_MUTED)
